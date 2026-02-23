@@ -1,0 +1,1 @@
+"""Cogito core package."""
