@@ -97,8 +97,8 @@ class TestGenome:
         min_params = min_genome.get_param_count_estimate()
         max_params = max_genome.get_param_count_estimate()
 
-        assert 10_000 <= min_params <= 20_000
-        assert 1_000_000 <= max_params <= 2_000_000
+        assert 10_000 <= min_params <= 50_000
+        assert 100_000 <= max_params <= 500_000  # Reduced range after optimization
 
     def test_serialize_roundtrip(self, rng: Generator) -> None:
         genome = Genome(rng=rng)

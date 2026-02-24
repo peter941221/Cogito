@@ -13,10 +13,10 @@ class Config:
 
     # World parameters
     WORLD_SIZE: ClassVar[int] = 64  # Grid size (width and height)
-    NUM_FOOD: ClassVar[int] = 15  # Total food tiles
+    NUM_FOOD: ClassVar[int] = 30  # Total food tiles (increased for better survival)
     NUM_DANGER: ClassVar[int] = 8  # Total danger tiles
     NUM_WALLS: ClassVar[int] = 40  # Total wall tiles
-    FOOD_ENERGY: ClassVar[int] = 20  # Energy gain per food
+    FOOD_ENERGY: ClassVar[int] = 25  # Energy gain per food (increased)
     DANGER_PENALTY: ClassVar[int] = 10  # Energy loss per danger tile
     STEP_COST: ClassVar[int] = 1  # Energy cost per step
     FOOD_RESPAWN_DELAY: ClassVar[int] = 0  # Steps before food respawns
@@ -25,7 +25,7 @@ class Config:
     ECHO_DELAY: ClassVar[int] = 3  # Echo delay steps (exp2)
 
     # Agent parameters
-    INITIAL_ENERGY: ClassVar[int] = 100  # Starting energy
+    INITIAL_ENERGY: ClassVar[int] = 120  # Starting energy (increased)
     MAX_ENERGY: ClassVar[int] = 100  # Maximum energy
     VIEW_RANGE: ClassVar[int] = 3  # Vision radius (7x7)
     SENSORY_DIM: ClassVar[int] = 256  # Observation dimension
@@ -75,10 +75,10 @@ class Config:
     EPIGENETIC_DECAY: ClassVar[float] = 0.5
 
     # Reproduction parameters (continuous)
-    BIRTH_ENERGY: ClassVar[int] = 60
-    MATURITY_AGE: ClassVar[int] = 100
-    MATING_ENERGY_THRESHOLD: ClassVar[int] = 25
-    MATING_ENERGY_COST: ClassVar[int] = 15
+    BIRTH_ENERGY: ClassVar[int] = 80
+    MATURITY_AGE: ClassVar[int] = 50  # Reduced from 100 for faster reproduction cycle
+    MATING_ENERGY_THRESHOLD: ClassVar[int] = 20  # Reduced from 25
+    MATING_ENERGY_COST: ClassVar[int] = 10  # Reduced from 15
     MATING_COOLDOWN: ClassVar[int] = 50
     SECOND_OFFSPRING_PROB: ClassVar[float] = 0.3
     MATING_MODE: ClassVar[str] = "tolerant"
