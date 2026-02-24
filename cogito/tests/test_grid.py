@@ -51,9 +51,9 @@ class TestObservationVector:
     """Tests for observation vector generation."""
 
     def test_observation_shape(self, world: CogitoWorld):
-        """get_observation returns shape (106,)."""
+        """get_observation returns shape (256,)."""
         obs = world.get_observation((32, 32))
-        assert obs.shape == (106,)
+        assert obs.shape == (256,)
 
     def test_observation_values_normalized(self, world: CogitoWorld):
         """All observation values are in [0, 1] range."""
@@ -66,19 +66,19 @@ class TestObservationVector:
     def test_observation_at_center(self, world: CogitoWorld):
         """Observation at center of grid works correctly."""
         obs = world.get_observation((32, 32))
-        assert obs.shape == (106,)
+        assert obs.shape == (256,)
         assert not np.any(np.isnan(obs))
 
     def test_observation_at_corner(self, world: CogitoWorld):
         """Observation at corner works with toroidal wrapping."""
         obs = world.get_observation((0, 0))
-        assert obs.shape == (106,)
+        assert obs.shape == (256,)
         assert not np.any(np.isnan(obs))
 
     def test_observation_at_edge(self, world: CogitoWorld):
         """Observation at edge works with toroidal wrapping."""
         obs = world.get_observation((63, 32))
-        assert obs.shape == (106,)
+        assert obs.shape == (256,)
         assert not np.any(np.isnan(obs))
 
 
@@ -127,7 +127,7 @@ class TestToroidalTopology:
         # At position (63, 32), vision should include column 0
         obs = world.get_observation((63, 32))
         # Should not raise any errors
-        assert obs.shape == (106,)
+        assert obs.shape == (256,)
 
 
 class TestEnergySystem:
@@ -137,6 +137,13 @@ class TestEnergySystem:
         """Each step costs STEP_COST energy."""
         pos = world.get_random_empty_position()
         _, energy_change, _ = world.step(pos, 5, 100)  # wait action
+        assert energy_change == -Config.STEP_COST
+
+    def test_interact_no_op(self, world: CogitoWorld):
+        """Interact action does not move the agent."""
+        pos = world.get_random_empty_position()
+        new_pos, energy_change, _ = world.step(pos, 6, 100)
+        assert new_pos == pos
         assert energy_change == -Config.STEP_COST
 
     def test_food_energy_gain(self, world: CogitoWorld, rng: Generator):
@@ -160,7 +167,9 @@ class TestEnergySystem:
                     # Move from (nx, ny) towards danger at (dx, dy)
                     if dx == (nx + 1) % 64:  # danger is to the right
                         _, energy_change, _ = world.step((nx, ny), 3, 100)
-                        assert energy_change == -Config.STEP_COST - Config.DANGER_PENALTY
+                        assert (
+                            energy_change == -Config.STEP_COST - Config.DANGER_PENALTY
+                        )
                         return
 
         pytest.skip("Could not find valid test position near danger")

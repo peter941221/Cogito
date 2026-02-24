@@ -96,7 +96,7 @@ class HiddenInterface:
 
         Args:
             agent_pos: Agent's current position.
-            action: Agent's action (0-5).
+            action: Agent's action (0-6).
             current_step: Current simulation step.
 
         Returns:
@@ -153,7 +153,6 @@ class HiddenInterface:
 
         # Set to max energy
         agent._current_energy = float(self.config.MAX_ENERGY)
-        agent.agent_energy = float(self.config.MAX_ENERGY)  # Also update simulation's copy
 
         # Return energy gain
         return float(self.config.MAX_ENERGY) - old_energy

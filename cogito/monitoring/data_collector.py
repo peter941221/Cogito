@@ -20,8 +20,8 @@ if TYPE_CHECKING:
     from cogito.agent.cogito_agent import CogitoAgent
     from cogito.world.grid import CogitoWorld
 
-# Internal state vector dimension: 512 (hidden) + 128 (core_out) + 6 (action_probs) + 64 (prediction)
-INTERNAL_STATE_DIM = 512 + 128 + 6 + 64  # = 710
+# Internal state vector dimension: 512 (hidden) + 128 (core_out) + actions + 64 (prediction)
+INTERNAL_STATE_DIM = 512 + 128 + Config.NUM_ACTIONS + 64
 
 
 class DataCollector:
@@ -148,21 +148,24 @@ class DataCollector:
         pos_y = info.get("pos_y", 0)
 
         cursor = self.conn.cursor()
-        cursor.execute("""
+        cursor.execute(
+            """
             INSERT OR REPLACE INTO behavior_log
             (step, pos_x, pos_y, energy, action, reward, is_alive, current_lifespan, action_entropy)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, (
-            step,
-            pos_x,
-            pos_y,
-            info.get("energy", 0.0),
-            info.get("action", 0),
-            info.get("reward", 0.0),
-            0 if info.get("done", False) else 1,
-            agent.current_lifespan if hasattr(agent, "current_lifespan") else 0,
-            info.get("entropy", 0.0),
-        ))
+        """,
+            (
+                step,
+                pos_x,
+                pos_y,
+                info.get("energy", 0.0),
+                info.get("action", 0),
+                info.get("reward", 0.0),
+                0 if info.get("done", False) else 1,
+                agent.current_lifespan if hasattr(agent, "current_lifespan") else 0,
+                info.get("entropy", 0.0),
+            ),
+        )
         self.conn.commit()
 
     def _record_internal_state(
@@ -189,10 +192,10 @@ class DataCollector:
             core_output = np.array(core_output)
         core_output = self._pad_to_size(core_output, 128)
 
-        # Action probs (6) - placeholder
-        action_probs = np.zeros(6)
+        # Action probs - placeholder
+        action_probs = np.zeros(self.config.NUM_ACTIONS, dtype=np.float32)
         action = info.get("action", 0)
-        if 0 <= action < 6:
+        if 0 <= action < self.config.NUM_ACTIONS:
             action_probs[action] = 1.0
 
         # Prediction (64)
@@ -202,12 +205,14 @@ class DataCollector:
         prediction = self._pad_to_size(prediction, 64)
 
         # Concatenate
-        state_vector = np.concatenate([
-            hidden_vector,
-            core_output,
-            action_probs,
-            prediction,
-        ])
+        state_vector = np.concatenate(
+            [
+                hidden_vector,
+                core_output,
+                action_probs,
+                prediction,
+            ]
+        )
 
         # Store
         self.internal_states[self.internal_record_count] = state_vector
@@ -219,7 +224,7 @@ class DataCollector:
             return arr[:size]
         else:
             padded = np.zeros(size, dtype=np.float32)
-            padded[:len(arr)] = arr
+            padded[: len(arr)] = arr
             return padded
 
     def _record_learning(self, step: int, info: dict) -> None:
@@ -227,17 +232,20 @@ class DataCollector:
         loss_info = info.get("loss_info", {})
 
         cursor = self.conn.cursor()
-        cursor.execute("""
+        cursor.execute(
+            """
             INSERT OR REPLACE INTO learning_log
             (step, prediction_loss, survival_loss, total_loss, weight_norm)
             VALUES (?, ?, ?, ?, ?)
-        """, (
-            step,
-            loss_info.get("prediction_loss", 0.0),
-            loss_info.get("survival_loss", 0.0),
-            loss_info.get("total_loss", 0.0),
-            0.0,  # weight_norm not tracked yet
-        ))
+        """,
+            (
+                step,
+                loss_info.get("prediction_loss", 0.0),
+                loss_info.get("survival_loss", 0.0),
+                loss_info.get("total_loss", 0.0),
+                0.0,  # weight_norm not tracked yet
+            ),
+        )
         self.conn.commit()
 
     def get_behavior_stats(self, last_n_steps: int = 1000) -> dict:
@@ -265,11 +273,14 @@ class DataCollector:
 
         # Get recent records
         start_step = max(0, total - last_n_steps)
-        cursor.execute("""
+        cursor.execute(
+            """
             SELECT energy, current_lifespan, action, is_alive
             FROM behavior_log
             WHERE step >= ?
-        """, (start_step,))
+        """,
+            (start_step,),
+        )
 
         rows = cursor.fetchall()
 
@@ -286,7 +297,7 @@ class DataCollector:
         actions = [r[2] for r in rows]
         is_alive = [r[3] for r in rows]
 
-        action_counts = [actions.count(i) for i in range(6)]
+        action_counts = [actions.count(i) for i in range(self.config.NUM_ACTIONS)]
 
         return {
             "avg_energy": np.mean(energies),
@@ -339,12 +350,15 @@ class DataCollector:
             }
 
         start_step = max(0, total - last_n_steps)
-        cursor.execute("""
+        cursor.execute(
+            """
             SELECT step, prediction_loss, survival_loss, total_loss
             FROM learning_log
             WHERE step >= ?
             ORDER BY step
-        """, (start_step,))
+        """,
+            (start_step,),
+        )
 
         rows = cursor.fetchall()
 

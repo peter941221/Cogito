@@ -110,8 +110,8 @@ class CogitoWorld:
         # Find a clear area for the zone
         max_attempts = 1000
         for _ in range(max_attempts):
-            x = self.rng.integers(size, self.size - size)
-            y = self.rng.integers(size, self.size - size)
+            x = int(self.rng.integers(size, self.size - size))
+            y = int(self.rng.integers(size, self.size - size))
 
             # Check if area is clear
             area = self.grid[x - size : x + size + 1, y - size : y + size + 1]
@@ -127,21 +127,23 @@ class CogitoWorld:
         self.danger_positions = list(zip(*np.where(self.grid == DANGER), strict=False))
 
     def get_observation(self, agent_pos: tuple[int, int]) -> np.ndarray:
-        """Generate 106-dimensional observation vector for agent.
+        """Generate 256-dimensional observation vector for agent.
 
         Observation structure:
             - Positions 0-97: 7x7 view × 2 channels (type + distance) = 98
-            - Position 98: normalized energy (0-1)
-            - Positions 99-104: previous action one-hot (6 dims)
-            - Position 105: energy change sign normalized (0-1)
+            - Positions 98-105: energy + prev action one-hot (7 dims)
+            - Positions 106-169: echo channel (64 dims, zero by default)
+            - Positions 170-218: social view (49 dims, zero by default)
+            - Positions 219-222: reproduction state (4 dims, zero by default)
+            - Positions 223-255: reserved (zero)
 
         Args:
             agent_pos: Agent's current (x, y) position.
 
         Returns:
-            Normalized observation vector of shape (106,).
+            Normalized observation vector of shape (256,).
         """
-        obs = np.zeros(106, dtype=np.float32)
+        obs = np.zeros(self.config.SENSORY_DIM, dtype=np.float32)
         ax, ay = agent_pos
 
         # 7x7 view (view_range = 3)
@@ -166,8 +168,8 @@ class CogitoWorld:
                 obs[view_idx * 2] = type_normalized
                 obs[view_idx * 2 + 1] = distance_normalized
 
-        # Note: Positions 98-105 are set by the agent (energy, prev_action, etc.)
-        # These will be filled in by the simulation/agent code
+        # Note: Positions 98-105 are set by the agent (energy, prev_action).
+        # Remaining channels are filled by other systems when active.
 
         return obs
 
@@ -186,10 +188,11 @@ class CogitoWorld:
             3: move right (increase x)
             4: eat (consume food if on food tile)
             5: wait (do nothing)
+            6: interact (no-op placeholder)
 
         Args:
             agent_pos: Current (x, y) position.
-            action: Action index (0-5).
+            action: Action index (0-6).
             current_energy: Current energy level.
 
         Returns:
@@ -216,6 +219,8 @@ class CogitoWorld:
                 self._respawn_food()
                 self._update_entity_positions()
         elif action == 5:  # Wait
+            pass
+        elif action == 6:  # Interact (no-op)
             pass
 
         # Check for wall collision

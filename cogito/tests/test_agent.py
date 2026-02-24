@@ -38,32 +38,32 @@ class TestSensoryEncoder:
         assert encoder is not None
 
     def test_input_shape_unbatched(self):
-        """Input (106,) -> output (64,)."""
+        """Input (256,) -> output (64,)."""
         encoder = SensoryEncoder()
-        obs = torch.randn(106)
+        obs = torch.randn(Config.SENSORY_DIM)
         output = encoder(obs)
         assert output.shape == (64,)
 
     def test_input_shape_batched(self):
-        """Input (32, 106) -> output (32, 64)."""
+        """Input (32, 256) -> output (32, 64)."""
         encoder = SensoryEncoder()
-        obs = torch.randn(32, 106)
+        obs = torch.randn(32, Config.SENSORY_DIM)
         output = encoder(obs)
         assert output.shape == (32, 64)
 
     def test_output_not_nan(self):
         """Output is not NaN or Inf."""
         encoder = SensoryEncoder()
-        obs = torch.randn(106)
+        obs = torch.randn(Config.SENSORY_DIM)
         output = encoder(obs)
         assert not torch.isnan(output).any()
         assert not torch.isinf(output).any()
 
     def test_parameter_count(self):
-        """Parameter count is approximately 21,000-23,000."""
+        """Parameter count is approximately 40,000-43,000."""
         encoder = SensoryEncoder()
         count = encoder.count_parameters()
-        assert 21000 <= count <= 23000
+        assert 40000 <= count <= 43000
 
 
 # === RecurrentCore Tests ===
@@ -91,7 +91,7 @@ class TestRecurrentCore:
         hidden = core.init_hidden()
 
         encoded = torch.randn(64)
-        action_onehot = torch.zeros(6)
+        action_onehot = torch.zeros(Config.NUM_ACTIONS)
         action_onehot[0] = 1.0
 
         output, new_hidden = core(encoded, action_onehot, hidden)
@@ -106,7 +106,7 @@ class TestRecurrentCore:
         hidden = core.init_hidden(batch_size)
 
         encoded = torch.randn(batch_size, 64)
-        action_onehot = torch.zeros(batch_size, 6)
+        action_onehot = torch.zeros(batch_size, Config.NUM_ACTIONS)
         action_onehot[:, 0] = 1.0
 
         output, new_hidden = core(encoded, action_onehot, hidden)
@@ -120,7 +120,7 @@ class TestRecurrentCore:
         hidden = core.init_hidden()
 
         encoded = torch.randn(64)
-        action_onehot = torch.zeros(6)
+        action_onehot = torch.zeros(Config.NUM_ACTIONS)
         action_onehot[0] = 1.0
 
         # First step
@@ -138,7 +138,7 @@ class TestRecurrentCore:
         hidden = core.init_hidden()
 
         zero_encoded = torch.zeros(64)
-        zero_action = torch.zeros(6)
+        zero_action = torch.zeros(Config.NUM_ACTIONS)
 
         # Multiple steps with zero input
         hidden_states = [hidden]
@@ -177,11 +177,11 @@ class TestActionHead:
         assert head is not None
 
     def test_forward_shape(self):
-        """Input (128,) -> output (6,)."""
+        """Input (128,) -> output (7,)."""
         head = ActionHead()
         core_output = torch.randn(128)
         logits = head(core_output)
-        assert logits.shape == (6,)
+        assert logits.shape == (Config.NUM_ACTIONS,)
 
     def test_select_action_returns_valid(self):
         """select_action returns valid values."""
@@ -191,7 +191,7 @@ class TestActionHead:
         action, log_prob, entropy = head.select_action(core_output)
 
         assert isinstance(action, int)
-        assert 0 <= action <= 5
+        assert 0 <= action <= Config.NUM_ACTIONS - 1
         assert isinstance(log_prob, float)
         assert log_prob < 0  # Log probs are negative
         assert isinstance(entropy, float)
@@ -250,11 +250,11 @@ class TestMemoryBuffer:
         buffer = MemoryBuffer(capacity=100)
 
         exp = Experience(
-            observation=np.zeros(106),
+            observation=np.zeros(Config.SENSORY_DIM),
             encoded=np.zeros(64),
             action=0,
             reward=0.0,
-            next_observation=np.zeros(106),
+            next_observation=np.zeros(Config.SENSORY_DIM),
             next_encoded=np.zeros(64),
             done=False,
             hidden_vector=np.zeros(512),
@@ -272,11 +272,11 @@ class TestMemoryBuffer:
 
         for i in range(150):
             exp = Experience(
-                observation=np.zeros(106),
+                observation=np.zeros(Config.SENSORY_DIM),
                 encoded=np.zeros(64),
                 action=i,
                 reward=0.0,
-                next_observation=np.zeros(106),
+                next_observation=np.zeros(Config.SENSORY_DIM),
                 next_encoded=np.zeros(64),
                 done=False,
                 hidden_vector=np.zeros(512),
@@ -293,11 +293,11 @@ class TestMemoryBuffer:
 
         for i in range(50):
             exp = Experience(
-                observation=np.ones(106) * i,
+                observation=np.ones(Config.SENSORY_DIM) * i,
                 encoded=np.ones(64) * i,
-                action=i % 6,
+                action=i % Config.NUM_ACTIONS,
                 reward=float(i),
-                next_observation=np.ones(106) * (i + 1),
+                next_observation=np.ones(Config.SENSORY_DIM) * (i + 1),
                 next_encoded=np.ones(64) * (i + 1),
                 done=False,
                 hidden_vector=np.ones(512) * i,
@@ -307,7 +307,8 @@ class TestMemoryBuffer:
             buffer.push(exp)
 
         batch = buffer.sample(32)
-        assert batch.observations.shape == (32, 106)
+        assert batch is not None
+        assert batch.observations.shape == (32, Config.SENSORY_DIM)
         assert batch.encoded.shape == (32, 64)
         assert batch.actions.shape == (32,)
 
@@ -323,11 +324,11 @@ class TestMemoryBuffer:
 
         for i in range(20):
             exp = Experience(
-                observation=np.zeros(106),
+                observation=np.zeros(Config.SENSORY_DIM),
                 encoded=np.zeros(64),
                 action=i,
                 reward=0.0,
-                next_observation=np.zeros(106),
+                next_observation=np.zeros(Config.SENSORY_DIM),
                 next_encoded=np.zeros(64),
                 done=False,
                 hidden_vector=np.zeros(512),
@@ -355,12 +356,12 @@ class TestCogitoAgent:
     def test_act_returns_valid(self):
         """act() returns valid action and info."""
         agent = CogitoAgent()
-        obs = np.random.rand(106).astype(np.float32)
+        obs = np.random.rand(Config.SENSORY_DIM).astype(np.float32)
 
         action, info = agent.act(obs, energy=100.0)
 
         assert isinstance(action, int)
-        assert 0 <= action <= 5
+        assert 0 <= action <= Config.NUM_ACTIONS - 1
         assert "encoded" in info
         assert "core_output" in info
         assert "prediction" in info
@@ -371,7 +372,7 @@ class TestCogitoAgent:
     def test_act_info_shapes(self):
         """act() info has correct shapes."""
         agent = CogitoAgent()
-        obs = np.random.rand(106).astype(np.float32)
+        obs = np.random.rand(Config.SENSORY_DIM).astype(np.float32)
 
         _, info = agent.act(obs, energy=100.0)
 
@@ -383,7 +384,7 @@ class TestCogitoAgent:
     def test_hidden_changes_over_steps(self):
         """Hidden vector changes over sequential acts."""
         agent = CogitoAgent()
-        obs = np.random.rand(106).astype(np.float32)
+        obs = np.random.rand(Config.SENSORY_DIM).astype(np.float32)
 
         hidden_vectors = []
         for _ in range(10):
@@ -397,7 +398,7 @@ class TestCogitoAgent:
     def test_reset_on_death(self):
         """reset_on_death resets hidden state."""
         agent = CogitoAgent()
-        obs = np.random.rand(106).astype(np.float32)
+        obs = np.random.rand(Config.SENSORY_DIM).astype(np.float32)
 
         # Run a few steps
         for _ in range(5):
@@ -419,7 +420,7 @@ class TestCogitoAgent:
     def test_save_load(self):
         """save and load preserves state."""
         agent = CogitoAgent()
-        obs = np.random.rand(106).astype(np.float32)
+        obs = np.random.rand(Config.SENSORY_DIM).astype(np.float32)
 
         # Run some steps
         for _ in range(5):
@@ -442,10 +443,68 @@ class TestCogitoAgent:
             assert agent2.prev_action == agent.prev_action
 
     def test_total_parameters(self):
-        """Total parameters in 250,000-270,000 range."""
+        """Total parameters in 280,000-300,000 range."""
         agent = CogitoAgent()
         count = agent.count_parameters()
-        assert 250000 <= count <= 270000
+        assert 280000 <= count <= 300000
+
+    def test_config_dict_changes_architecture(self):
+        """Config dict produces different parameter counts."""
+        small_config = {
+            "sensory_dim": Config.SENSORY_DIM,
+            "encoded_dim": 16,
+            "encoder_hidden_dim": 32,
+            "encoder_num_layers": 1,
+            "encoder_use_norm": False,
+            "core_hidden_dim": 32,
+            "core_num_layers": 1,
+            "core_dropout": 0.0,
+            "num_actions": Config.NUM_ACTIONS,
+            "action_hidden_dim": 16,
+            "action_temperature": 1.0,
+            "prediction_hidden": 16,
+            "prediction_depth": 1,
+            "learning_rate": 0.001,
+            "gamma": 0.95,
+            "prediction_weight": 1.0,
+            "survival_weight": 1.0,
+            "grad_clip": 1.0,
+            "buffer_size": 1000,
+            "batch_size": 16,
+            "replay_ratio": 0.0,
+            "reward_death": -5.0,
+            "reward_food": 2.0,
+            "reward_step": -0.05,
+        }
+        large_config = {
+            "sensory_dim": Config.SENSORY_DIM,
+            "encoded_dim": 128,
+            "encoder_hidden_dim": 256,
+            "encoder_num_layers": 3,
+            "encoder_use_norm": True,
+            "core_hidden_dim": 256,
+            "core_num_layers": 3,
+            "core_dropout": 0.1,
+            "num_actions": Config.NUM_ACTIONS,
+            "action_hidden_dim": 128,
+            "action_temperature": 1.0,
+            "prediction_hidden": 128,
+            "prediction_depth": 3,
+            "learning_rate": 0.0005,
+            "gamma": 0.99,
+            "prediction_weight": 1.0,
+            "survival_weight": 1.0,
+            "grad_clip": 1.0,
+            "buffer_size": 5000,
+            "batch_size": 32,
+            "replay_ratio": 0.0,
+            "reward_death": -10.0,
+            "reward_food": 5.0,
+            "reward_step": -0.1,
+        }
+        small_agent = CogitoAgent(small_config)
+        large_agent = CogitoAgent(large_config)
+        assert small_agent.count_parameters() < large_agent.count_parameters()
 
 
 # === OnlineLearner Tests ===
@@ -487,13 +546,13 @@ class TestOnlineLearner:
         learner = OnlineLearner(agent)
 
         # Run agent forward to get proper tensors
-        obs = np.random.rand(106).astype(np.float32)
+        obs = np.random.rand(Config.SENSORY_DIM).astype(np.float32)
         action, info = agent.act(obs, energy=100.0)
 
         # Get proper tensors from forward pass
         obs_tensor = torch.tensor(agent._complete_observation(obs), dtype=torch.float32)
         encoded = agent.encoder(obs_tensor)
-        next_obs_tensor = torch.zeros(106, dtype=torch.float32)
+        next_obs_tensor = torch.zeros(Config.SENSORY_DIM, dtype=torch.float32)
         next_encoded = agent.encoder(next_obs_tensor)
         core_output = torch.randn(128)  # Core output is 128-dim
         prediction = agent.prediction_head(core_output)  # Takes 128-dim, outputs 64-dim
@@ -503,7 +562,7 @@ class TestOnlineLearner:
             encoded=encoded,
             action=action,
             reward=0.0,
-            next_observation=np.zeros(106),
+            next_observation=np.zeros(Config.SENSORY_DIM),
             next_encoded=next_encoded,
             log_prob=info["log_prob"],
             core_output=core_output,
@@ -521,7 +580,7 @@ class TestOnlineLearner:
         learner = OnlineLearner(agent)
 
         # Run full forward pass
-        obs = np.random.rand(106).astype(np.float32)
+        obs = np.random.rand(Config.SENSORY_DIM).astype(np.float32)
 
         # Complete observation
         full_obs = agent._complete_observation(obs)
@@ -531,7 +590,7 @@ class TestOnlineLearner:
         encoded = agent.encoder(obs_tensor)
 
         # Forward through core
-        prev_action_onehot = torch.zeros(6)
+        prev_action_onehot = torch.zeros(Config.NUM_ACTIONS)
         prev_action_onehot[agent.prev_action] = 1.0
         hidden = agent.core.init_hidden()
         core_output, _ = agent.core(encoded, prev_action_onehot, hidden)
@@ -540,7 +599,7 @@ class TestOnlineLearner:
         prediction = agent.prediction_head(core_output)
 
         # Get next encoded
-        next_obs_tensor = torch.zeros(106, dtype=torch.float32)
+        next_obs_tensor = torch.zeros(Config.SENSORY_DIM, dtype=torch.float32)
         next_encoded = agent.encoder(next_obs_tensor)
 
         # Get param before

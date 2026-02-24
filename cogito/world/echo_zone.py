@@ -49,7 +49,7 @@ class EchoZone:
 
         # State
         self.active = False
-        self.mode = 'self'  # 'self', 'random', or 'other'
+        self.mode = "self"  # 'self', 'random', or 'other'
 
         # Buffer for delayed states (stores hidden vectors)
         self.state_buffer: deque[np.ndarray] = deque(maxlen=self.delay + 1)
@@ -61,7 +61,7 @@ class EchoZone:
         self._random_states = np.random.randn(1000, 64).astype(np.float32)
         self._random_idx = 0
 
-    def activate(self, mode: str = 'self') -> None:
+    def activate(self, mode: str = "self") -> None:
         """Activate the echo zone.
 
         Args:
@@ -144,17 +144,17 @@ class EchoZone:
         if len(self.state_buffer) <= self.delay:
             return np.zeros(64, dtype=np.float32)
 
-        if self.mode == 'self':
+        if self.mode == "self":
             # Return delayed state
             return self.state_buffer[0].copy()
 
-        elif self.mode == 'random':
+        elif self.mode == "random":
             # Return random vector
             state = self._random_states[self._random_idx].copy()
             self._random_idx = (self._random_idx + 1) % len(self._random_states)
             return state
 
-        elif self.mode == 'other':
+        elif self.mode == "other":
             # Return other agent's delayed state
             if len(self.other_agent_states) > self.delay:
                 return self.other_agent_states[0].copy()
@@ -170,15 +170,14 @@ class EchoZone:
         """Get observation with echo channel.
 
         Args:
-            base_observation: Base 106-dim observation.
+            base_observation: Base 256-dim observation.
             agent_pos: Agent's (x, y) position.
 
         Returns:
-            170-dim observation (106 base + 64 echo).
+            256-dim observation with echo channel.
         """
         # Create extended observation
-        obs = np.zeros(170, dtype=np.float32)
-        obs[:106] = base_observation
+        obs = base_observation.copy()
 
         # Add echo signal if in zone
         if self.is_in_zone(*agent_pos):

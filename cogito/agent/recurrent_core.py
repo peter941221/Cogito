@@ -14,49 +14,45 @@ from cogito.config import Config
 
 
 class RecurrentCore(nn.Module):
-    """2-layer LSTM recurrent core.
-
-    Architecture:
-        Input: encoded_sensory(64) + prev_action_onehot(6) = 70 dim
-        2-layer LSTM with hidden_dim=128
-        Output: (output, hidden_state)
-
-    The hidden state is managed externally (passed in/out) to allow
-    proper sequence processing and state inspection.
-
-    Parameter count: ~232,000
-        - Layer 1: 4 * (70 + 128) * 128 = 101,376
-        - Layer 2: 4 * (128 + 128) * 128 = 131,072
-        - Total: ~232,448
-    """
+    """LSTM recurrent core."""
 
     def __init__(
         self,
         input_dim: int | None = None,
         hidden_dim: int | None = None,
         num_layers: int | None = None,
+        dropout: float | None = None,
+        encoded_dim: int | None = None,
+        num_actions: int | None = None,
     ):
         """Initialize the recurrent core.
 
         Args:
-            input_dim: Input dimension (default: 64 + 6 = 70).
-            hidden_dim: Hidden dimension (default: Config.HIDDEN_DIM = 128).
-            num_layers: Number of LSTM layers (default: Config.NUM_LSTM_LAYERS = 2).
+            input_dim: Input dimension (default: encoded_dim + num_actions).
+            hidden_dim: Hidden dimension (default: Config.CORE_HIDDEN_DIM).
+            num_layers: Number of LSTM layers (default: Config.CORE_NUM_LAYERS).
+            dropout: Dropout between LSTM layers (default: Config.CORE_DROPOUT).
+            encoded_dim: Encoded sensory dimension (default: Config.ENCODED_DIM).
+            num_actions: Action dimension (default: Config.NUM_ACTIONS).
         """
         super().__init__()
 
-        # input_dim = encoded_dim(64) + action_onehot(6)
-        self.encoded_dim = Config.ENCODED_DIM
-        self.action_dim = Config.NUM_ACTIONS
+        # input_dim = encoded_dim(64) + action_onehot(7)
+        self.encoded_dim = encoded_dim or Config.ENCODED_DIM
+        self.action_dim = num_actions or Config.NUM_ACTIONS
         self.input_dim = input_dim or (self.encoded_dim + self.action_dim)
-        self.hidden_dim = hidden_dim or Config.HIDDEN_DIM
-        self.num_layers = num_layers or Config.NUM_LSTM_LAYERS
+        self.hidden_dim = hidden_dim or Config.CORE_HIDDEN_DIM
+        self.num_layers = num_layers or Config.CORE_NUM_LAYERS
+        self.dropout = dropout if dropout is not None else Config.CORE_DROPOUT
+
+        lstm_dropout = self.dropout if self.num_layers > 1 else 0.0
 
         self.lstm = nn.LSTM(
             input_size=self.input_dim,
             hidden_size=self.hidden_dim,
             num_layers=self.num_layers,
             batch_first=True,
+            dropout=lstm_dropout,
         )
 
     def forward(
@@ -68,8 +64,8 @@ class RecurrentCore(nn.Module):
         """Process one step through LSTM.
 
         Args:
-            encoded_sensory: Encoded observation, shape (batch, 64) or (64,).
-            prev_action_onehot: Previous action one-hot, shape (batch, 6) or (6,).
+            encoded_sensory: Encoded observation, shape (batch, encoded_dim) or (encoded_dim,).
+            prev_action_onehot: Previous action one-hot, shape (batch, num_actions) or (num_actions,).
             hidden_state: Tuple of (h, c) states.
 
         Returns:
@@ -86,10 +82,10 @@ class RecurrentCore(nn.Module):
         else:
             squeeze_output = False
 
-        # Concatenate: (batch, 64) + (batch, 6) -> (batch, 70)
+        # Concatenate: (batch, encoded_dim) + (batch, num_actions) -> (batch, input_dim)
         combined = torch.cat([encoded_sensory, prev_action_onehot], dim=-1)
 
-        # Add sequence dimension for LSTM: (batch, 70) -> (batch, 1, 70)
+        # Add sequence dimension for LSTM: (batch, 71) -> (batch, 1, 71)
         combined = combined.unsqueeze(1)
 
         # LSTM forward

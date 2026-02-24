@@ -10,8 +10,8 @@ def test_config_is_dataclass() -> None:
 
 def test_required_constants() -> None:
     assert Config.WORLD_SIZE == 64
-    assert Config.SENSORY_DIM == 106
-    assert Config.NUM_ACTIONS == 6
+    assert Config.SENSORY_DIM == 256
+    assert Config.NUM_ACTIONS == 7
     assert Config.MAX_ENERGY == 100
 
 

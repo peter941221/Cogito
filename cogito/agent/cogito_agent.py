@@ -1,9 +1,9 @@
 """Cogito Agent: Integrated agent with sensory encoding, LSTM core, and learning.
 
 This is the main agent class that combines:
-    - SensoryEncoder: 106-dim -> 64-dim
+    - SensoryEncoder: 256-dim -> 64-dim
     - RecurrentCore: 2-layer LSTM
-    - ActionHead: 128-dim -> 6 actions
+    - ActionHead: 128-dim -> 7 actions
     - PredictionHead: 128-dim -> 64-dim prediction
     - MemoryBuffer: Experience replay
     - OnlineLearner: REINFORCE + prediction learning
@@ -19,6 +19,7 @@ import torch
 import torch.nn as nn
 
 from cogito.agent.action_head import ActionHead
+from cogito.agent.agent_config import AgentConfig, resolve_agent_config
 from cogito.agent.memory_buffer import Experience, MemoryBuffer
 from cogito.agent.prediction_head import PredictionHead
 from cogito.agent.recurrent_core import RecurrentCore
@@ -32,46 +33,71 @@ if TYPE_CHECKING:
 class CogitoAgent(nn.Module):
     """Integrated Cogito agent with learning capability.
 
-    Total parameters: ~263,000
-        - Encoder: ~22,000
-        - LSTM core: ~232,000
-        - Action head: ~800
-        - Prediction head: ~8,200
+    Total parameters (default config): ~286,000 (depends on config).
     """
 
     def __init__(
         self,
-        config: type[Config] | None = None,
+        config: AgentConfig | dict | type[Config] | None = None,
         device: torch.device | str | None = None,
     ):
         """Initialize the Cogito agent.
 
         Args:
-            config: Configuration class (default: Config).
+            config: Config class or dict for agent parameters.
             device: Device for computation (default: CPU).
         """
         super().__init__()
 
-        self.config = config or Config
-        self.device = device or torch.device("cpu")
+        if isinstance(config, type) and issubclass(config, Config):
+            self.env_config = config
+        else:
+            self.env_config = Config
+        self.agent_config = resolve_agent_config(config)
+        if device is None:
+            self.device = torch.device("cpu")
+        else:
+            self.device = torch.device(device)
 
         # Create modules
-        self.encoder = SensoryEncoder()
-        self.core = RecurrentCore()
-        self.action_head = ActionHead()
-        self.prediction_head = PredictionHead()
+        self.encoder = SensoryEncoder(
+            input_dim=self.agent_config.sensory_dim,
+            encoded_dim=self.agent_config.encoded_dim,
+            hidden_dim=self.agent_config.encoder_hidden_dim,
+            num_layers=self.agent_config.encoder_num_layers,
+            use_norm=self.agent_config.encoder_use_norm,
+        )
+        self.core = RecurrentCore(
+            encoded_dim=self.agent_config.encoded_dim,
+            num_actions=self.agent_config.num_actions,
+            hidden_dim=self.agent_config.core_hidden_dim,
+            num_layers=self.agent_config.core_num_layers,
+            dropout=self.agent_config.core_dropout,
+        )
+        self.action_head = ActionHead(
+            input_dim=self.agent_config.core_hidden_dim,
+            num_actions=self.agent_config.num_actions,
+            hidden_dim=self.agent_config.action_hidden_dim,
+            temperature=self.agent_config.action_temperature,
+        )
+        self.prediction_head = PredictionHead(
+            input_dim=self.agent_config.core_hidden_dim,
+            output_dim=self.agent_config.encoded_dim,
+            hidden_dim=self.agent_config.prediction_hidden,
+            depth=self.agent_config.prediction_depth,
+        )
 
         # Move to device
         self.to(self.device)
 
         # Memory buffer
-        self.memory = MemoryBuffer(capacity=self.config.BUFFER_SIZE)
+        self.memory = MemoryBuffer(capacity=self.agent_config.buffer_size)
 
         # Initialize hidden state
         self.hidden = self.core.init_hidden(device=self.device)
 
         # Previous action (start with wait)
-        self.prev_action = 5  # Wait action
+        self.prev_action = min(5, self.agent_config.num_actions - 1)
 
         # Statistics
         self.step_count = 0
@@ -81,7 +107,8 @@ class CogitoAgent(nn.Module):
         self.current_lifespan = 0
 
         # Current step info (for observation completion)
-        self._current_energy = float(self.config.INITIAL_ENERGY)
+        self._current_energy = float(self.env_config.INITIAL_ENERGY)
+        self._last_log_prob: float | None = None
 
     def act(
         self,
@@ -91,7 +118,7 @@ class CogitoAgent(nn.Module):
         """Process observation and select action.
 
         Args:
-            observation: 106-dim observation vector.
+            observation: 256-dim observation vector.
             energy: Current energy (for observation completion).
 
         Returns:
@@ -116,7 +143,7 @@ class CogitoAgent(nn.Module):
 
         # Get previous action one-hot
         prev_action_onehot = torch.zeros(
-            self.config.NUM_ACTIONS, device=self.device
+            self.agent_config.num_actions, device=self.device
         )
         prev_action_onehot[self.prev_action] = 1.0
 
@@ -125,6 +152,7 @@ class CogitoAgent(nn.Module):
 
         # Select action
         action, log_prob, entropy = self.action_head.select_action(core_output)
+        self._last_log_prob = log_prob
 
         # Predict next sensory state
         prediction = self.prediction_head(core_output)
@@ -186,8 +214,10 @@ class CogitoAgent(nn.Module):
         full_next_obs = self._complete_observation(next_observation)
 
         # Compute reward
-        ate_food = energy_change > 0 and energy_change > self.config.STEP_COST
-        reward = learner.compute_reward(energy_change, done, ate_food) if learner else 0.0
+        ate_food = energy_change > 0 and energy_change > self.env_config.STEP_COST
+        reward = (
+            learner.compute_reward(energy_change, done, ate_food) if learner else 0.0
+        )
 
         # Get encoded observations
         obs_tensor = torch.tensor(full_obs, dtype=torch.float32, device=self.device)
@@ -201,10 +231,7 @@ class CogitoAgent(nn.Module):
         # Get hidden vector from current state
         hidden_vector = self.core.get_hidden_vector(self.hidden).detach().cpu().numpy()
 
-        # Get log_prob from last action
-        # We need to recompute this since we didn't store it
-        # For now, use placeholder
-        log_prob = 0.0  # Will be updated during act()
+        log_prob = self._last_log_prob if self._last_log_prob is not None else 0.0
 
         experience = Experience(
             observation=full_obs,
@@ -225,18 +252,12 @@ class CogitoAgent(nn.Module):
         # Learn
         loss_info = None
         if learner is not None:
-            # Get stored info from last act() call
-            # This is a simplified version - in practice we'd store these
-            loss_info = learner.learn_from_experience(
+            loss_info = learner.learn_from_step(
                 observation=full_obs,
-                encoded=encoded,
+                next_observation=full_next_obs,
                 action=action,
                 reward=reward,
-                next_observation=full_next_obs,
-                next_encoded=next_encoded,
                 log_prob=log_prob,
-                core_output=torch.zeros(self.config.HIDDEN_DIM, device=self.device),
-                prediction=torch.zeros(self.config.ENCODED_DIM, device=self.device),
                 done=done,
             )
 
@@ -253,32 +274,29 @@ class CogitoAgent(nn.Module):
         learned weights and memory (learned knowledge persists).
         """
         self.hidden = self.core.init_hidden(device=self.device)
-        self.prev_action = 5  # Wait
+        self.prev_action = min(5, self.agent_config.num_actions - 1)
         self.times_died += 1
         self.current_lifespan = 0
-        self._current_energy = float(self.config.INITIAL_ENERGY)
+        self._current_energy = float(self.env_config.INITIAL_ENERGY)
+        self._last_log_prob = None
 
     def _complete_observation(self, observation: np.ndarray) -> np.ndarray:
         """Complete observation with agent state.
 
         Args:
-            observation: 106-dim observation (first 98 from world).
+            observation: 256-dim observation (first 98 from world).
 
         Returns:
-            Complete 106-dim observation with energy and action info.
+            Complete 256-dim observation with energy and action info.
         """
         full_obs = observation.copy()
 
         # Position 98: normalized energy
-        full_obs[98] = self._current_energy / self.config.MAX_ENERGY
+        full_obs[98] = self._current_energy / self.env_config.MAX_ENERGY
 
-        # Positions 99-104: previous action one-hot
-        for i in range(self.config.NUM_ACTIONS):
+        # Positions 99-105: previous action one-hot
+        for i in range(self.agent_config.num_actions):
             full_obs[99 + i] = 1.0 if i == self.prev_action else 0.0
-
-        # Position 105: energy change sign (placeholder, updated externally)
-        # This will be set based on actual energy change
-        full_obs[105] = 0.5  # Neutral
 
         return full_obs
 

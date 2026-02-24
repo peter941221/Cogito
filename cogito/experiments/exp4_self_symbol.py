@@ -9,7 +9,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import numpy as np
 from sklearn.cluster import DBSCAN
@@ -19,6 +19,7 @@ from sklearn.metrics import mutual_info_score
 from cogito.config import Config
 from cogito.core.simulation import Simulation
 from cogito.monitoring.svc_detector import SVCDetector
+from cogito.agent.cogito_agent import CogitoAgent
 
 
 @dataclass
@@ -27,7 +28,7 @@ class SVCReport:
 
     detected: bool
     candidate_clusters: list[int]
-    condition_scores: dict[str, float]
+    condition_scores: dict[int, dict[str, float]]
     confidence: float
     emergence_step: int | None
     stability_count: int
@@ -72,6 +73,7 @@ class SelfSymbolExperiment:
         self,
         checkpoint_path: str | None = None,
         data_dir: str = "data/exp4",
+        agent: CogitoAgent | None = None,
     ):
         """Initialize experiment.
 
@@ -82,6 +84,8 @@ class SelfSymbolExperiment:
         self.checkpoint_path = checkpoint_path
         self.data_dir = Path(data_dir)
         self.data_dir.mkdir(parents=True, exist_ok=True)
+
+        self.agent_override = agent
 
         self.sim = None
         self.svc_detector = SVCDetector()
@@ -95,7 +99,11 @@ class SelfSymbolExperiment:
         """Set up simulation."""
         self.sim = Simulation(headless=True)
 
-        if self.checkpoint_path and Path(self.checkpoint_path).exists():
+        if self.agent_override is not None:
+            self.sim.agent = self.agent_override
+            self.sim.agent_energy = float(Config.INITIAL_ENERGY)
+            self.sim.agent_pos = self.sim.world.get_random_empty_position()
+        elif self.checkpoint_path and Path(self.checkpoint_path).exists():
             self.sim.agent.load(self.checkpoint_path)
 
     def _compute_event_correlations(
@@ -125,8 +133,13 @@ class SelfSymbolExperiment:
 
         # Event types
         event_types = [
-            'food_nearby', 'danger_nearby', 'wall_nearby',
-            'eating', 'moving', 'low_energy', 'high_energy',
+            "food_nearby",
+            "danger_nearby",
+            "wall_nearby",
+            "eating",
+            "moving",
+            "low_energy",
+            "high_energy",
         ]
 
         correlations = {}
@@ -183,16 +196,18 @@ class SelfSymbolExperiment:
 
             # Condition 1: Isolation (low correlation with all events)
             max_corr = max(event_corrs.values()) if event_corrs else 1.0
-            scores['isolation'] = 1.0 - max_corr if max_corr < ISOLATION_THRESHOLD else 0.0
+            scores["isolation"] = (
+                1.0 - max_corr if max_corr < ISOLATION_THRESHOLD else 0.0
+            )
 
             # Condition 2: Decision participation (checked externally)
-            scores['decision'] = 0.5  # Placeholder
+            scores["decision"] = 0.5  # Placeholder
 
             # Condition 3: Stability (from history)
-            scores['stability'] = 0.5  # Placeholder
+            scores["stability"] = 0.5  # Placeholder
 
             # Condition 4: Emergence (step > threshold)
-            scores['emergence'] = 1.0 if current_step > EMERGENCE_MIN_STEP else 0.0
+            scores["emergence"] = 1.0 if current_step > EMERGENCE_MIN_STEP else 0.0
 
             condition_scores[cluster_id] = scores
 
@@ -203,8 +218,7 @@ class SelfSymbolExperiment:
         # Compute overall confidence
         if candidates:
             max_confidence = max(
-                np.mean(condition_scores[c].values())
-                for c in candidates
+                np.mean(condition_scores[c].values()) for c in candidates
             )
         else:
             max_confidence = 0.0
@@ -232,24 +246,28 @@ class SelfSymbolExperiment:
         Returns:
             List of SVC reports.
         """
+        if self.sim is None:
+            raise RuntimeError("Simulation not initialized")
+
+        sim = self.sim
         reports = []
 
         for step in range(num_steps):
-            obs = self.sim.world.get_observation(self.sim.agent_pos)
-            action, info = self.sim.agent.act(obs, self.sim.agent_energy)
+            obs = sim.world.get_observation(sim.agent_pos)
+            action, info = sim.agent.act(obs, sim.agent_energy)
 
             # Store state
             self.state_history.append(info["hidden_vector"].copy())
 
             # Create event annotation
             event = {
-                'food_nearby': self._check_food_nearby(),
-                'danger_nearby': self._check_danger_nearby(),
-                'wall_nearby': self._check_wall_nearby(),
-                'eating': action == 4,
-                'moving': action in (0, 1, 2, 3),
-                'low_energy': self.sim.agent_energy < 30,
-                'high_energy': self.sim.agent_energy > 70,
+                "food_nearby": self._check_food_nearby(),
+                "danger_nearby": self._check_danger_nearby(),
+                "wall_nearby": self._check_wall_nearby(),
+                "eating": action == 4,
+                "moving": action in (0, 1, 2, 3),
+                "low_energy": sim.agent_energy < 30,
+                "high_energy": sim.agent_energy > 70,
             }
             self.event_history.append(event)
 
@@ -258,60 +276,76 @@ class SelfSymbolExperiment:
                 recent_states = np.array(self.state_history[-analysis_interval:])
                 recent_events = self.event_history[-analysis_interval:]
 
-                correlations = self._compute_event_correlations(recent_states, recent_events)
-                report = self._check_svc_conditions(correlations, self.sim.step_count)
+                correlations = self._compute_event_correlations(
+                    recent_states, recent_events
+                )
+                report = self._check_svc_conditions(correlations, sim.step_count)
                 reports.append(report)
                 self.detection_history.append(report)
 
                 if report.detected:
-                    print(f"  SVC detected at step {step}! Confidence: {report.confidence:.2f}")
+                    print(
+                        f"  SVC detected at step {step}! Confidence: {report.confidence:.2f}"
+                    )
 
             # Step simulation
-            new_pos, energy_change, done = self.sim.world.step(
-                self.sim.agent_pos, action, self.sim.agent_energy
+            new_pos, energy_change, done = sim.world.step(
+                sim.agent_pos, action, sim.agent_energy
             )
-            self.sim.agent_pos = new_pos
-            self.sim.agent_energy = max(0, self.sim.agent_energy + energy_change)
+            sim.agent_pos = new_pos
+            sim.agent_energy = max(0.0, sim.agent_energy + energy_change)
 
-            if done or self.sim.agent_energy <= 0:
-                self.sim.agent.reset_on_death()
-                self.sim.agent_pos = self.sim.world.get_random_empty_position()
-                self.sim.agent_energy = float(Config.INITIAL_ENERGY)
+            if done or sim.agent_energy <= 0:
+                sim.agent.reset_on_death()
+                sim.agent_pos = sim.world.get_random_empty_position()
+                sim.agent_energy = float(Config.INITIAL_ENERGY)
 
-            self.sim.step_count += 1
-            self.sim.world.update(self.sim.step_count)
+            sim.step_count += 1
+            sim.world.update(sim.step_count)
 
         return reports
 
     def _check_food_nearby(self) -> bool:
         """Check if food is nearby."""
-        ax, ay = self.sim.agent_pos
+        if self.sim is None:
+            raise RuntimeError("Simulation not initialized")
+
+        sim = self.sim
+        ax, ay = sim.agent_pos
         for dx in range(-3, 4):
             for dy in range(-3, 4):
-                x = (ax + dx) % self.sim.world.size
-                y = (ay + dy) % self.sim.world.size
-                if self.sim.world.grid[x, y] == 2:  # Food
+                x = (ax + dx) % sim.world.size
+                y = (ay + dy) % sim.world.size
+                if sim.world.grid[x, y] == 2:  # Food
                     return True
         return False
 
     def _check_danger_nearby(self) -> bool:
         """Check if danger is nearby."""
-        ax, ay = self.sim.agent_pos
+        if self.sim is None:
+            raise RuntimeError("Simulation not initialized")
+
+        sim = self.sim
+        ax, ay = sim.agent_pos
         for dx in range(-3, 4):
             for dy in range(-3, 4):
-                x = (ax + dx) % self.sim.world.size
-                y = (ay + dy) % self.sim.world.size
-                if self.sim.world.grid[x, y] == 3:  # Danger
+                x = (ax + dx) % sim.world.size
+                y = (ay + dy) % sim.world.size
+                if sim.world.grid[x, y] == 3:  # Danger
                     return True
         return False
 
     def _check_wall_nearby(self) -> bool:
         """Check if wall is adjacent."""
-        ax, ay = self.sim.agent_pos
+        if self.sim is None:
+            raise RuntimeError("Simulation not initialized")
+
+        sim = self.sim
+        ax, ay = sim.agent_pos
         for dx, dy in [(0, 1), (0, -1), (1, 0), (-1, 0)]:
-            x = (ax + dx) % self.sim.world.size
-            y = (ay + dy) % self.sim.world.size
-            if self.sim.world.grid[x, y] == 1:  # Wall
+            x = (ax + dx) % sim.world.size
+            y = (ay + dy) % sim.world.size
+            if sim.world.grid[x, y] == 1:  # Wall
                 return True
         return False
 
@@ -355,10 +389,11 @@ class SelfSymbolExperiment:
         for report in reports:
             if report.condition_scores:
                 for cluster_id, scores in report.condition_scores.items():
-                    isolation_scores.append(scores.get('isolation', 0))
-                    decision_scores.append(scores.get('decision', 0))
-                    stability_scores.append(scores.get('stability', 0))
-                    emergence_scores.append(scores.get('emergence', 0))
+                    score_dict = cast(dict[str, float], scores)
+                    isolation_scores.append(score_dict.get("isolation", 0.0))
+                    decision_scores.append(score_dict.get("decision", 0.0))
+                    stability_scores.append(score_dict.get("stability", 0.0))
+                    emergence_scores.append(score_dict.get("emergence", 0.0))
                     break
             num_clusters.append(len(report.condition_scores))
             orphan_clusters.append(len(report.candidate_clusters))
@@ -383,7 +418,7 @@ class SelfSymbolExperiment:
             svc_in_deprivation=None,
             svc_in_mirror=None,
             svc_in_rebellion=None,
-            classification='B' if detected else 'A',
+            classification="B" if detected else "A",
         )
 
         # Print results
@@ -404,16 +439,16 @@ def main():
 
     parser = argparse.ArgumentParser(description="Run self symbol monitoring")
     parser.add_argument(
-        "--checkpoint", type=str, default=None,
-        help="Path to mature agent checkpoint"
+        "--checkpoint", type=str, default=None, help="Path to mature agent checkpoint"
     )
     parser.add_argument(
-        "--data-dir", type=str, default="data/exp4",
-        help="Directory to save experiment data"
+        "--data-dir",
+        type=str,
+        default="data/exp4",
+        help="Directory to save experiment data",
     )
     parser.add_argument(
-        "--steps", type=int, default=100000,
-        help="Number of steps to monitor"
+        "--steps", type=int, default=100000, help="Number of steps to monitor"
     )
 
     args = parser.parse_args()
@@ -426,15 +461,15 @@ def main():
 
     # Save results
     result_dict = {
-        'svc_detected': result.svc_detected,
-        'svc_emergence_step': result.svc_emergence_step,
-        'svc_confidence': result.svc_confidence,
-        'num_analyses': len(result.num_clusters_history),
-        'classification': result.classification,
+        "svc_detected": result.svc_detected,
+        "svc_emergence_step": result.svc_emergence_step,
+        "svc_confidence": result.svc_confidence,
+        "num_analyses": len(result.num_clusters_history),
+        "classification": result.classification,
     }
 
     result_path = Path(args.data_dir) / "exp4_results.json"
-    with open(result_path, 'w') as f:
+    with open(result_path, "w") as f:
         json.dump(result_dict, f, indent=2)
 
     print(f"\nResults saved to: {result_path}")

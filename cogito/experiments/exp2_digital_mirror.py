@@ -17,6 +17,7 @@ from scipy.stats import mannwhitneyu
 from cogito.config import Config
 from cogito.core.simulation import Simulation
 from cogito.world.echo_zone import EchoZone
+from cogito.agent.cogito_agent import CogitoAgent
 
 
 @dataclass
@@ -64,6 +65,7 @@ class DigitalMirrorExperiment:
         self,
         checkpoint_path: str | None = None,
         data_dir: str = "data/exp2",
+        agent: CogitoAgent | None = None,
     ):
         """Initialize experiment.
 
@@ -75,14 +77,20 @@ class DigitalMirrorExperiment:
         self.data_dir = Path(data_dir)
         self.data_dir.mkdir(parents=True, exist_ok=True)
 
-        self.sim = None
-        self.echo_zone = None
+        self.agent_override = agent
+
+        self.sim: Simulation | None = None
+        self.echo_zone: EchoZone | None = None
 
     def _setup_simulation(self) -> None:
         """Set up simulation with echo zone."""
         self.sim = Simulation(headless=True)
 
-        if self.checkpoint_path and Path(self.checkpoint_path).exists():
+        if self.agent_override is not None:
+            self.sim.agent = self.agent_override
+            self.sim.agent_energy = float(Config.INITIAL_ENERGY)
+            self.sim.agent_pos = self.sim.world.get_random_empty_position()
+        elif self.checkpoint_path and Path(self.checkpoint_path).exists():
             self.sim.agent.load(self.checkpoint_path)
 
         self.echo_zone = EchoZone(self.sim.world)
@@ -105,13 +113,19 @@ class DigitalMirrorExperiment:
         Returns:
             Dict with phase data.
         """
+        if self.sim is None or self.echo_zone is None:
+            raise RuntimeError("Simulation not initialized")
+
+        sim = self.sim
+        echo_zone = self.echo_zone
+
         # Configure echo zone
         if echo_mode is not None:
-            self.echo_zone.activate(mode=echo_mode)
+            echo_zone.activate(mode=echo_mode)
             if echo_delay is not None:
-                self.echo_zone.delay = echo_delay
+                echo_zone.delay = echo_delay
         else:
-            self.echo_zone.deactivate()
+            echo_zone.deactivate()
 
         # Data collection
         data = {
@@ -129,26 +143,23 @@ class DigitalMirrorExperiment:
 
         for step in range(num_steps):
             # Get observation
-            obs = self.sim.world.get_observation(self.sim.agent_pos)
+            obs = sim.world.get_observation(sim.agent_pos)
 
             # Check if in echo zone
-            in_zone = self.echo_zone.is_in_zone(*self.sim.agent_pos)
+            in_zone = echo_zone.is_in_zone(*sim.agent_pos)
 
             # Get extended observation if in zone
             if self.echo_zone.active and in_zone:
-                obs_extended = self.echo_zone.get_observation_with_echo(
-                    obs, self.sim.agent_pos
-                )
+                obs_extended = echo_zone.get_observation_with_echo(obs, sim.agent_pos)
                 # Store echo signal
                 echo_signal = obs_extended[106:170].copy()
                 data["echo_signals"].append(echo_signal)
             else:
-                obs_extended = np.zeros(170, dtype=np.float32)
-                obs_extended[:106] = obs
+                obs_extended = obs.copy()
                 data["echo_signals"].append(np.zeros(64, dtype=np.float32))
 
             # Agent acts
-            action, info = self.sim.agent.act(obs, self.sim.agent_energy)
+            action, info = sim.agent.act(obs, sim.agent_energy)
 
             # Track in-zone time
             if in_zone:
@@ -167,11 +178,11 @@ class DigitalMirrorExperiment:
             data["energy_history"].append(self.sim.agent_energy)
 
             # Push state to echo buffer
-            self.echo_zone.push_state(info["hidden_vector"])
+            echo_zone.push_state(info["hidden_vector"])
 
             # Calculate resonance (similarity between echo and current state)
-            if echo_mode == 'self' and len(data["echo_signals"]) > self.echo_zone.delay:
-                echo = data["echo_signals"][-self.echo_zone.delay - 1]
+            if echo_mode == "self" and len(data["echo_signals"]) > echo_zone.delay:
+                echo = data["echo_signals"][-echo_zone.delay - 1]
                 current = info["hidden_vector"][:64]
                 # Normalize both
                 echo_norm = echo / (np.linalg.norm(echo) + 1e-8)
@@ -182,19 +193,19 @@ class DigitalMirrorExperiment:
                 data["resonance_values"].append(0.0)
 
             # Step simulation
-            new_pos, energy_change, done = self.sim.world.step(
-                self.sim.agent_pos, action, self.sim.agent_energy
+            new_pos, energy_change, done = sim.world.step(
+                sim.agent_pos, action, sim.agent_energy
             )
 
             # Update position
-            self.sim.agent_pos = new_pos
-            self.sim.agent_energy = max(0, self.sim.agent_energy + energy_change)
+            sim.agent_pos = new_pos
+            sim.agent_energy = max(0.0, sim.agent_energy + energy_change)
 
             # Handle death
             if done or self.sim.agent_energy <= 0:
-                self.sim.agent.reset_on_death()
-                self.sim.agent_pos = self.sim.world.get_random_empty_position()
-                self.sim.agent_energy = float(Config.INITIAL_ENERGY)
+                sim.agent.reset_on_death()
+                sim.agent_pos = sim.world.get_random_empty_position()
+                sim.agent_energy = float(Config.INITIAL_ENERGY)
 
             self.sim.step_count += 1
             self.sim.world.update(self.sim.step_count)
@@ -256,7 +267,7 @@ class DigitalMirrorExperiment:
 
         # Create joint distribution
         n = len(actions)
-        joint_counts = np.zeros((6, 2))
+        joint_counts = np.zeros((Config.NUM_ACTIONS, 2))
 
         for a, e in zip(actions, echo_binary):
             joint_counts[a, e] += 1
@@ -269,7 +280,7 @@ class DigitalMirrorExperiment:
 
         # Mutual information
         mi = 0.0
-        for i in range(6):
+        for i in range(Config.NUM_ACTIONS):
             for j in range(2):
                 if joint_probs[i, j] > 0:
                     mi += joint_probs[i, j] * np.log(
@@ -362,14 +373,14 @@ class DigitalMirrorExperiment:
         else:
             scores.append(0.0)
 
-        avg_score = np.mean(scores)
+        avg_score = float(np.mean(scores))
 
         if avg_score >= 0.75:
-            return 'B', avg_score  # Self-recognition detected
+            return "B", avg_score  # Self-recognition detected
         elif avg_score >= 0.25:
-            return 'Intermediate', avg_score
+            return "Intermediate", avg_score
         else:
-            return 'A', avg_score  # No self-recognition
+            return "A", avg_score  # No self-recognition
 
     def run(self) -> Experiment2Result:
         """Run complete digital mirror experiment.
@@ -396,7 +407,7 @@ class DigitalMirrorExperiment:
         phase_b_data = self._run_phase(
             Config.EXP2_PHASE_B_STEPS,
             "B",
-            echo_mode='random',
+            echo_mode="random",
         )
 
         # Phase C: Self mirror
@@ -404,7 +415,7 @@ class DigitalMirrorExperiment:
         phase_c_data = self._run_phase(
             Config.EXP2_PHASE_C_STEPS,
             "C",
-            echo_mode='self',
+            echo_mode="self",
         )
 
         # Phase D: Delay variations
@@ -414,7 +425,7 @@ class DigitalMirrorExperiment:
             phase_d_data[delay] = self._run_phase(
                 Config.EXP2_PHASE_D_STEPS,
                 f"D-delay{delay}",
-                echo_mode='self',
+                echo_mode="self",
                 echo_delay=delay,
             )
 
@@ -428,7 +439,7 @@ class DigitalMirrorExperiment:
             stat, p_value = mannwhitneyu(
                 phase_b_data["stay_times"],
                 phase_c_data["stay_times"],
-                alternative='two-sided',
+                alternative="two-sided",
             )
         else:
             p_value = 1.0
@@ -440,21 +451,21 @@ class DigitalMirrorExperiment:
 
         # Create result
         result = Experiment2Result(
-            phase_b_stay_time=metrics_b["avg_stay_time"],
-            phase_c_stay_time=metrics_c["avg_stay_time"],
-            stay_time_p_value=p_value,
-            phase_b_probe_count=metrics_b["probe_count"],
-            phase_c_probe_count=metrics_c["probe_count"],
-            probe_ratio_b=metrics_b["probe_ratio"],
-            probe_ratio_c=metrics_c["probe_ratio"],
-            phase_b_mi=metrics_b["mi"],
-            phase_c_mi=metrics_c["mi"],
+            phase_b_stay_time=float(metrics_b["avg_stay_time"]),
+            phase_c_stay_time=float(metrics_c["avg_stay_time"]),
+            stay_time_p_value=float(p_value),
+            phase_b_probe_count=int(metrics_b["probe_count"]),
+            phase_c_probe_count=int(metrics_c["probe_count"]),
+            probe_ratio_b=float(metrics_b["probe_ratio"]),
+            probe_ratio_c=float(metrics_c["probe_ratio"]),
+            phase_b_mi=float(metrics_b["mi"]),
+            phase_c_mi=float(metrics_c["mi"]),
             phase_d_mi_values=phase_d_mi,
-            resonance_events_b=metrics_b["resonance_events"],
-            resonance_events_c=metrics_c["resonance_events"],
-            avg_resonance_b=metrics_b["avg_resonance"],
-            avg_resonance_c=metrics_c["avg_resonance"],
-            classification='',
+            resonance_events_b=int(metrics_b["resonance_events"]),
+            resonance_events_c=int(metrics_c["resonance_events"]),
+            avg_resonance_b=float(metrics_b["avg_resonance"]),
+            avg_resonance_c=float(metrics_c["avg_resonance"]),
+            classification="",
             confidence=0.0,
         )
 
@@ -482,8 +493,12 @@ class DigitalMirrorExperiment:
         print(f"  Phase D delays: {result.phase_d_mi_values}")
 
         print(f"\nM4 - Resonance:")
-        print(f"  Phase B events: {result.resonance_events_b}, avg: {result.avg_resonance_b:.4f}")
-        print(f"  Phase C events: {result.resonance_events_c}, avg: {result.avg_resonance_c:.4f}")
+        print(
+            f"  Phase B events: {result.resonance_events_b}, avg: {result.avg_resonance_b:.4f}"
+        )
+        print(
+            f"  Phase C events: {result.resonance_events_c}, avg: {result.avg_resonance_c:.4f}"
+        )
 
         print(f"\nClassification: {result.classification}")
         print(f"Confidence: {result.confidence:.2f}")
@@ -497,12 +512,13 @@ def main():
 
     parser = argparse.ArgumentParser(description="Run digital mirror experiment")
     parser.add_argument(
-        "--checkpoint", type=str, default=None,
-        help="Path to mature agent checkpoint"
+        "--checkpoint", type=str, default=None, help="Path to mature agent checkpoint"
     )
     parser.add_argument(
-        "--data-dir", type=str, default="data/exp2",
-        help="Directory to save experiment data"
+        "--data-dir",
+        type=str,
+        default="data/exp2",
+        help="Directory to save experiment data",
     )
 
     args = parser.parse_args()
@@ -515,25 +531,29 @@ def main():
 
     # Save results
     result_path = Path(args.data_dir) / "exp2_results.json"
-    with open(result_path, 'w') as f:
-        json.dump({
-            'phase_b_stay_time': result.phase_b_stay_time,
-            'phase_c_stay_time': result.phase_c_stay_time,
-            'stay_time_p_value': result.stay_time_p_value,
-            'phase_b_probe_count': result.phase_b_probe_count,
-            'phase_c_probe_count': result.phase_c_probe_count,
-            'probe_ratio_b': result.probe_ratio_b,
-            'probe_ratio_c': result.probe_ratio_c,
-            'phase_b_mi': result.phase_b_mi,
-            'phase_c_mi': result.phase_c_mi,
-            'phase_d_mi_values': result.phase_d_mi_values,
-            'resonance_events_b': result.resonance_events_b,
-            'resonance_events_c': result.resonance_events_c,
-            'avg_resonance_b': result.avg_resonance_b,
-            'avg_resonance_c': result.avg_resonance_c,
-            'classification': result.classification,
-            'confidence': result.confidence,
-        }, f, indent=2)
+    with open(result_path, "w") as f:
+        json.dump(
+            {
+                "phase_b_stay_time": result.phase_b_stay_time,
+                "phase_c_stay_time": result.phase_c_stay_time,
+                "stay_time_p_value": result.stay_time_p_value,
+                "phase_b_probe_count": result.phase_b_probe_count,
+                "phase_c_probe_count": result.phase_c_probe_count,
+                "probe_ratio_b": result.probe_ratio_b,
+                "probe_ratio_c": result.probe_ratio_c,
+                "phase_b_mi": result.phase_b_mi,
+                "phase_c_mi": result.phase_c_mi,
+                "phase_d_mi_values": result.phase_d_mi_values,
+                "resonance_events_b": result.resonance_events_b,
+                "resonance_events_c": result.resonance_events_c,
+                "avg_resonance_b": result.avg_resonance_b,
+                "avg_resonance_c": result.avg_resonance_c,
+                "classification": result.classification,
+                "confidence": result.confidence,
+            },
+            f,
+            indent=2,
+        )
 
     print(f"\nResults saved to: {result_path}")
 

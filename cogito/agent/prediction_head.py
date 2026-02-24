@@ -14,45 +14,52 @@ from cogito.config import Config
 
 
 class PredictionHead(nn.Module):
-    """Next sensory state prediction head.
-
-    Architecture:
-        Input: (batch, 128) LSTM output
-        Linear: 128 -> 64
-        Output: predicted next sensory encoding
-
-    The predicted encoding should match the encoder output for the
-    next observation, trained with MSE loss.
-    """
+    """Next sensory state prediction head."""
 
     def __init__(
         self,
         input_dim: int | None = None,
         output_dim: int | None = None,
+        hidden_dim: int | None = None,
+        depth: int | None = None,
     ):
         """Initialize the prediction head.
 
         Args:
-            input_dim: Input dimension (default: Config.HIDDEN_DIM = 128).
+            input_dim: Input dimension (default: Config.CORE_HIDDEN_DIM = 128).
             output_dim: Output dimension (default: Config.ENCODED_DIM = 64).
+            hidden_dim: Hidden layer size (default: Config.PREDICTION_HIDDEN).
+            depth: Number of layers (default: Config.PREDICTION_DEPTH).
         """
         super().__init__()
 
-        self.input_dim = input_dim or Config.HIDDEN_DIM
+        self.input_dim = input_dim or Config.CORE_HIDDEN_DIM
         self.output_dim = output_dim or Config.ENCODED_DIM
+        self.hidden_dim = hidden_dim or Config.PREDICTION_HIDDEN
+        self.depth = depth or Config.PREDICTION_DEPTH
 
-        self.fc = nn.Linear(self.input_dim, self.output_dim)
+        if self.depth <= 1:
+            self.net = nn.Linear(self.input_dim, self.output_dim)
+        else:
+            layers: list[nn.Module] = [
+                nn.Linear(self.input_dim, self.hidden_dim),
+                nn.ReLU(),
+            ]
+            for _ in range(self.depth - 2):
+                layers.extend([nn.Linear(self.hidden_dim, self.hidden_dim), nn.ReLU()])
+            layers.append(nn.Linear(self.hidden_dim, self.output_dim))
+            self.net = nn.Sequential(*layers)
 
     def forward(self, core_output: torch.Tensor) -> torch.Tensor:
         """Predict next sensory encoding.
 
         Args:
-            core_output: LSTM output, shape (batch, 128) or (128,).
+            core_output: LSTM output, shape (batch, hidden_dim) or (hidden_dim,).
 
         Returns:
-            Predicted encoding, shape (batch, 64) or (64,).
+            Predicted encoding, shape (batch, output_dim) or (output_dim,).
         """
-        return self.fc(core_output)
+        return self.net(core_output)
 
     def count_parameters(self) -> int:
         """Return total number of trainable parameters."""

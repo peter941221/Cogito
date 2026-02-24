@@ -28,11 +28,23 @@ class Config:
     INITIAL_ENERGY: ClassVar[int] = 100  # Starting energy
     MAX_ENERGY: ClassVar[int] = 100  # Maximum energy
     VIEW_RANGE: ClassVar[int] = 3  # Vision radius (7x7)
-    SENSORY_DIM: ClassVar[int] = 106  # Observation dimension
+    SENSORY_DIM: ClassVar[int] = 256  # Observation dimension
     ENCODED_DIM: ClassVar[int] = 64  # Encoder output dimension
     HIDDEN_DIM: ClassVar[int] = 128  # LSTM hidden size
-    NUM_ACTIONS: ClassVar[int] = 6  # Discrete action count
+    NUM_ACTIONS: ClassVar[int] = 7  # Discrete action count
     NUM_LSTM_LAYERS: ClassVar[int] = 2  # LSTM layer count
+
+    # Agent architecture defaults (evolution-compatible)
+    ENCODER_HIDDEN_DIM: ClassVar[int] = 128
+    ENCODER_NUM_LAYERS: ClassVar[int] = 2
+    ENCODER_USE_NORM: ClassVar[bool] = True
+    CORE_HIDDEN_DIM: ClassVar[int] = 128
+    CORE_NUM_LAYERS: ClassVar[int] = 2
+    CORE_DROPOUT: ClassVar[float] = 0.0
+    ACTION_HIDDEN_DIM: ClassVar[int] = 0  # 0 = linear head
+    ACTION_TEMPERATURE: ClassVar[float] = 1.0
+    PREDICTION_HIDDEN: ClassVar[int] = 64
+    PREDICTION_DEPTH: ClassVar[int] = 1
 
     # Learning parameters
     LEARNING_RATE: ClassVar[float] = 0.0003  # Adam learning rate
@@ -41,11 +53,50 @@ class Config:
     BATCH_SIZE: ClassVar[int] = 32  # Training batch size
     PREDICTION_LOSS_WEIGHT: ClassVar[float] = 1.0  # Prediction loss weight
     SURVIVAL_LOSS_WEIGHT: ClassVar[float] = 1.0  # Survival loss weight
+    REPLAY_RATIO: ClassVar[float] = 0.0  # Replay frequency
+    GRAD_CLIP: ClassVar[float] = 1.0  # Gradient clipping
+
+    # Reward parameters (default baseline)
+    REWARD_DEATH: ClassVar[float] = -10.0
+    REWARD_FOOD: ClassVar[float] = 5.0
+    REWARD_STEP: ClassVar[float] = -0.1
+
+    # Evolution parameters (generational)
+    POPULATION_SIZE: ClassVar[int] = 50
+    GENERATION_LIFESPAN: ClassVar[int] = 2000
+    NUM_GENERATIONS: ClassVar[int] = 100
+    ELITE_RATIO: ClassVar[float] = 0.1
+    MUTATION_RATE_INITIAL: ClassVar[float] = 0.2
+    MUTATION_RATE_FINAL: ClassVar[float] = 0.02
+    MUTATION_SCALE_INITIAL: ClassVar[float] = 0.2
+    MUTATION_SCALE_FINAL: ClassVar[float] = 0.02
+    CROSSOVER_RATE: ClassVar[float] = 0.8
+    TOURNAMENT_SIZE: ClassVar[int] = 3
+    EPIGENETIC_DECAY: ClassVar[float] = 0.5
+
+    # Reproduction parameters (continuous)
+    BIRTH_ENERGY: ClassVar[int] = 60
+    MATURITY_AGE: ClassVar[int] = 100
+    MATING_ENERGY_THRESHOLD: ClassVar[int] = 25
+    MATING_ENERGY_COST: ClassVar[int] = 15
+    MATING_COOLDOWN: ClassVar[int] = 50
+    SECOND_OFFSPRING_PROB: ClassVar[float] = 0.3
+    MATING_MODE: ClassVar[str] = "tolerant"
+    INITIAL_POPULATION: ClassVar[int] = 50
+    INITIAL_SPAWN_AREA: ClassVar[int] = 20
+    MAX_POPULATION: ClassVar[int] = 100
+    MIN_POPULATION: ClassVar[int] = 10
+    INJECTION_COUNT: ClassVar[int] = 5
+    INJECTION_MUTATION_RATE: ClassVar[float] = 0.15
+    INJECTION_MUTATION_SCALE: ClassVar[float] = 0.15
+    INJECTION_SOURCE: ClassVar[str] = "sampled"
+    SIMULATION_TOTAL_STEPS: ClassVar[int] = 500000
+    STATS_INTERVAL: ClassVar[int] = 100
 
     # Monitoring parameters
     STATE_RECORD_INTERVAL: ClassVar[int] = 10  # Steps between snapshots
     ANALYSIS_INTERVAL: ClassVar[int] = 500  # Steps between analyses
-    CHECKPOINT_INTERVAL: ClassVar[int] = 1000  # Steps between checkpoints
+    CHECKPOINT_INTERVAL: ClassVar[int] = 10000  # Steps between checkpoints
     TSNE_PERPLEXITY: ClassVar[int] = 30  # t-SNE perplexity
     DBSCAN_EPS: ClassVar[float] = 0.5  # DBSCAN epsilon
     DBSCAN_MIN_SAMPLES: ClassVar[int] = 10  # DBSCAN minimum samples
@@ -66,10 +117,21 @@ class Config:
     CHECKPOINT_DIR: ClassVar[str] = "data/checkpoints"  # Checkpoint path
     LOG_DIR: ClassVar[str] = "data/logs"  # Log path
     ANALYSIS_DIR: ClassVar[str] = "data/analysis"  # Analysis path
+    EVOLUTION_DIR: ClassVar[str] = "data/evolution"
+    EVOLUTION_CHECKPOINT_DIR: ClassVar[str] = "data/evolution/checkpoints"
+    EVOLUTION_ANALYSIS_DIR: ClassVar[str] = "data/evolution/analysis"
 
     @classmethod
     def create_dirs(cls) -> None:
         """Create required data directories."""
-        paths = (cls.DATA_DIR, cls.CHECKPOINT_DIR, cls.LOG_DIR, cls.ANALYSIS_DIR)
+        paths = (
+            cls.DATA_DIR,
+            cls.CHECKPOINT_DIR,
+            cls.LOG_DIR,
+            cls.ANALYSIS_DIR,
+            cls.EVOLUTION_DIR,
+            cls.EVOLUTION_CHECKPOINT_DIR,
+            cls.EVOLUTION_ANALYSIS_DIR,
+        )
         for path in paths:
             Path(path).mkdir(parents=True, exist_ok=True)

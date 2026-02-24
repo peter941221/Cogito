@@ -21,11 +21,11 @@ class Experience:
     """Single experience tuple.
 
     Attributes:
-        observation: Current observation (106,).
+        observation: Current observation (256,).
         encoded: Encoded observation (64,).
         action: Action taken (int).
         reward: Reward received (float).
-        next_observation: Next observation (106,).
+        next_observation: Next observation (256,).
         next_encoded: Next encoded observation (64,).
         done: Whether episode ended (bool).
         hidden_vector: Internal state at time of action (512,).
@@ -52,11 +52,11 @@ class ExperienceBatch:
     Each field is a numpy array or list of values.
     """
 
-    observations: np.ndarray  # (batch, 106)
+    observations: np.ndarray  # (batch, 256)
     encoded: np.ndarray  # (batch, 64)
     actions: np.ndarray  # (batch,)
     rewards: np.ndarray  # (batch,)
-    next_observations: np.ndarray  # (batch, 106)
+    next_observations: np.ndarray  # (batch, 256)
     next_encoded: np.ndarray  # (batch, 64)
     dones: np.ndarray  # (batch,)
     hidden_vectors: np.ndarray  # (batch, 512)

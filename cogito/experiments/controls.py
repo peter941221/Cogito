@@ -94,7 +94,7 @@ class RandomNoiseBaseline:
     @staticmethod
     def generate_observations(
         num_steps: int,
-        obs_dim: int = 106,
+        obs_dim: int = Config.SENSORY_DIM,
         seed: int | None = None,
     ) -> np.ndarray:
         """Generate random observations.
@@ -154,11 +154,12 @@ class BiasedRandomPolicy:
         """Initialize with action probabilities.
 
         Args:
-            action_probs: Probability for each action (6 total).
+            action_probs: Probability for each action (Config.NUM_ACTIONS total).
             seed: Random seed.
         """
         # Default: uniform distribution
-        self.action_probs = action_probs or [1/6] * 6
+        self.num_actions = Config.NUM_ACTIONS
+        self.action_probs = action_probs or [1 / self.num_actions] * self.num_actions
         self.rng = np.random.default_rng(seed)
 
     def get_action(self, observation: np.ndarray) -> int:
@@ -170,7 +171,7 @@ class BiasedRandomPolicy:
         Returns:
             Action index.
         """
-        return int(self.rng.choice(6, p=self.action_probs))
+        return int(self.rng.choice(self.num_actions, p=self.action_probs))
 
 
 def create_control_simulation(
@@ -192,13 +193,13 @@ def create_control_simulation(
 
     sim = Simulation(config=config, headless=True)
 
-    if control_type == 'untrained':
+    if control_type == "untrained":
         # Already has untrained agent
         pass
-    elif control_type == 'reset_hidden' and checkpoint_path:
+    elif control_type == "reset_hidden" and checkpoint_path:
         sim.agent.load(checkpoint_path)
         sim.agent.reset_on_death()
-    elif control_type == 'trained' and checkpoint_path:
+    elif control_type == "trained" and checkpoint_path:
         sim.agent.load(checkpoint_path)
 
     return sim

@@ -83,14 +83,14 @@ def run_phase0_test(
             obs = world.get_observation(agent_pos)
 
             # Validate observation
-            if obs.shape != (106,):
+            if obs.shape != (256,):
                 stats["observation_dims_correct"] = False
 
             if np.any(obs[:98] < 0) or np.any(obs[:98] > 1):
                 stats["observation_values_valid"] = False
 
             # Random action
-            action = rng.integers(0, 6)
+            action = int(rng.integers(0, Config.NUM_ACTIONS))
 
             # If agent is on food, higher chance to eat
             if world.grid[agent_pos[0], agent_pos[1]] == 2:  # FOOD
@@ -166,7 +166,7 @@ def validate_phase0(stats: dict) -> bool:
     """
     checks = {
         "Script runs without crash": True,
-        "Observation dims correct (106,)": stats["observation_dims_correct"],
+        "Observation dims correct (256,)": stats["observation_dims_correct"],
         "Observation values in [0,1]": stats["observation_values_valid"],
         "Food count stable": stats["food_count_stable"],
         "Deaths occurred": stats["deaths"] > 0,

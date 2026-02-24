@@ -38,7 +38,8 @@ class PositionalEncoding(nn.Module):
         pe = torch.zeros(max_len, d_model)
         pe[:, 0::2] = torch.sin(position * div_term)
         pe[:, 1::2] = torch.cos(position * div_term)
-        self.register_buffer('pe', pe)
+        self.pe = pe
+        self.register_buffer("pe", self.pe)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Add positional encoding to input.
@@ -49,7 +50,7 @@ class PositionalEncoding(nn.Module):
         Returns:
             Tensor with positional encoding added.
         """
-        return x + self.pe[:x.size(0)].unsqueeze(1)
+        return x + self.pe[: x.size(0)].unsqueeze(1)
 
 
 class CausalSelfAttention(nn.Module):
@@ -107,7 +108,7 @@ class CausalSelfAttention(nn.Module):
         # Causal mask
         if mask is None:
             mask = torch.triu(torch.ones(seq_len, seq_len, device=x.device), diagonal=1)
-            mask = mask.masked_fill(mask == 1, float('-inf'))
+            mask = mask.masked_fill(mask == 1, float("-inf"))
             scores = scores + mask.unsqueeze(0).unsqueeze(0)
         else:
             scores = scores + mask
@@ -176,7 +177,7 @@ class TransformerCore(nn.Module):
 
     def __init__(
         self,
-        input_dim: int = 70,  # 64 encoded + 6 action one-hot
+        input_dim: int | None = None,
         d_model: int = 64,
         n_heads: int = 4,
         n_layers: int = 2,
@@ -188,6 +189,8 @@ class TransformerCore(nn.Module):
         self.d_model = d_model
         self.context_len = context_len
 
+        input_dim = input_dim or (Config.ENCODED_DIM + Config.NUM_ACTIONS)
+
         # Input projection
         self.input_proj = nn.Linear(input_dim, d_model)
 
@@ -195,16 +198,19 @@ class TransformerCore(nn.Module):
         self.pos_encoding = PositionalEncoding(d_model, max_len=context_len)
 
         # Transformer blocks
-        self.blocks = nn.ModuleList([
-            TransformerBlock(d_model, n_heads, d_model * 4, dropout)
-            for _ in range(n_layers)
-        ])
+        self.blocks = nn.ModuleList(
+            [
+                TransformerBlock(d_model, n_heads, d_model * 4, dropout)
+                for _ in range(n_layers)
+            ]
+        )
 
         # Output projection to match LSTM output dim
         self.output_proj = nn.Linear(d_model, 128)
 
         # Context buffer
-        self.register_buffer('context_buffer', torch.zeros(context_len, 1, d_model))
+        self.register_buffer("context_buffer", torch.zeros(context_len, 1, d_model))
+        self.context_buffer: torch.Tensor
         self.context_pos = 0
 
     def forward(
@@ -217,7 +223,7 @@ class TransformerCore(nn.Module):
 
         Args:
             encoded: Encoded sensory input (batch, 64) or (64,).
-            prev_action_onehot: Previous action one-hot (batch, 6) or (6,).
+            prev_action_onehot: Previous action one-hot (batch, 7) or (7,).
             context: Optional context buffer (seq_len, batch, d_model).
 
         Returns:
@@ -232,7 +238,7 @@ class TransformerCore(nn.Module):
             squeeze_output = False
 
         # Concatenate input
-        x = torch.cat([encoded, prev_action_onehot], dim=-1)  # (batch, 70)
+        x = torch.cat([encoded, prev_action_onehot], dim=-1)
 
         # Project to model dimension
         x = self.input_proj(x)  # (batch, d_model)
@@ -241,19 +247,21 @@ class TransformerCore(nn.Module):
         batch_size = x.size(0)
 
         if context is None:
-            context = self.context_buffer.clone()
+            context_tensor = torch.clone(self.context_buffer)
+        else:
+            context_tensor = context
 
         # Update context (sliding window)
         if self.context_pos >= self.context_len:
             # Shift context
-            context = torch.roll(context, -1, dims=0)
-            context[-1] = x
+            context_tensor = torch.roll(context_tensor, -1, dims=0)
+            context_tensor[-1] = x
         else:
-            context[self.context_pos] = x
+            context_tensor[self.context_pos] = x
             self.context_pos += 1
 
         # Add positional encoding
-        context_pe = self.pos_encoding(context[:self.context_pos])
+        context_pe = self.pos_encoding(context_tensor[: self.context_pos])
 
         # Apply transformer blocks
         out = context_pe
@@ -269,7 +277,7 @@ class TransformerCore(nn.Module):
         if squeeze_output:
             output = output.squeeze(0)
 
-        return output, context
+        return output, context_tensor
 
     def init_context(self, device: torch.device | None = None) -> torch.Tensor:
         """Initialize empty context buffer.
@@ -299,7 +307,7 @@ class TransformerCore(nn.Module):
             return torch.zeros(512, device=next(self.parameters()).device)
 
         # Use last N positions and flatten
-        effective_context = context[:self.context_pos]
+        effective_context = context[: self.context_pos]
 
         # Mean and std across time
         mean = effective_context.mean(dim=0).flatten()  # (d_model,)
@@ -307,7 +315,11 @@ class TransformerCore(nn.Module):
 
         # Last hidden states
         last = effective_context[-1].flatten()  # (d_model,)
-        second_last = effective_context[-2].flatten() if self.context_pos > 1 else torch.zeros_like(last)
+        second_last = (
+            effective_context[-2].flatten()
+            if self.context_pos > 1
+            else torch.zeros_like(last)
+        )
 
         # Attention statistics (simulate)
         attn_mean = torch.zeros(128, device=mean.device)
@@ -340,7 +352,10 @@ class GenesisBetaAgent(nn.Module):
         super().__init__()
 
         self.config = config or Config
-        self.device = device or torch.device("cpu")
+        if device is None:
+            self.device = torch.device("cpu")
+        else:
+            self.device = torch.device(device)
 
         # Create modules
         self.encoder = SensoryEncoder()
@@ -376,7 +391,7 @@ class GenesisBetaAgent(nn.Module):
         """Process observation and select action.
 
         Args:
-            observation: 106-dim observation vector.
+            observation: 256-dim observation vector.
             energy: Current energy.
 
         Returns:
@@ -427,7 +442,6 @@ class GenesisBetaAgent(nn.Module):
         full_obs[98] = self._current_energy / self.config.MAX_ENERGY
         for i in range(self.config.NUM_ACTIONS):
             full_obs[99 + i] = 1.0 if i == self.prev_action else 0.0
-        full_obs[105] = 0.5
         return full_obs
 
     def reset_on_death(self) -> None:

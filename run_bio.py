@@ -1,13 +1,16 @@
-"""Run maturation phase: 100,000 steps to train a mature Cogito agent.
+#!/usr/bin/env python3
+"""Run bio-inspired simulation with internal drives.
 
-Alpha版本 - 标准强化学习范式
-    - 外部奖励信号
-    - 通过试错学习最优策略
+This script runs the Bio version of Cogito agent with:
+    - Hunger drive (internal motivation to seek food)
+    - Fear drive (internal motivation to avoid danger)
+    - Scent fields for food detection
+    - Intrinsic reward from internal state changes
 
 Usage:
-    python run_maturation.py --steps 10000
-    python run_maturation.py --steps 50000 --checkpoint-interval 5000
-    python run_maturation.py --display  # Show visualization
+    python run_bio.py --steps 10000
+    python run_bio.py --steps 50000 --checkpoint-interval 5000
+    python run_bio.py --visual  # Show visualization
 """
 
 from __future__ import annotations
@@ -19,14 +22,14 @@ from pathlib import Path
 import numpy as np
 
 from cogito.config import Config
-from cogito.core.simulation import Simulation
+from cogito.core.bio_simulation import BioSimulation
 
 
 def print_banner() -> None:
     """Print startup banner."""
     print()
     print("=" * 70)
-    print("🤖 Cogito Alpha Simulation - 标准强化学习版本")
+    print("🐛 Cogito Bio Simulation - 内在驱动力版本")
     print("=" * 70)
     print()
 
@@ -37,9 +40,10 @@ def print_legend() -> None:
     print("-" * 70)
     print("  Step  = 当前步数")
     print("  Life  = 平均寿命 (死亡前存活步数)")
-    print("  E     = 平均能量 (0-100) [Bio版特有]")
-    print("  Ent   = 策略熵 (0=确定, 1.79=随机)")
-    print("  Loss  = 预测损失 (越低越好)")
+    print("  E     = 平均能量 (0-100)")
+    print("  H     = 平均饥饿感 (0=饱足, 1=饥饿)")
+    print("  F     = 平均恐惧感 (0=平静, 1=恐惧)")
+    print("  R     = 平均内在奖励 (负=不适, 正=满足)")
     print("  Food  = 累计吃掉的食物")
     print("  D     = 累计死亡次数")
     print("-" * 70)
@@ -96,20 +100,21 @@ def print_final_stats(stats: dict, elapsed: float, total_steps: int) -> None:
     print(f"   隐状态方差: {stats['avg_hidden_var']:.6f}")
     print(f"   平均能量:   {stats['avg_energy']:.1f}")
 
-    # Alpha 版特有
+    # Bio特有统计
     print()
-    print("🤖 Alpha版特有 (对比Bio版)")
-    print(f"   奖励来源:   外部信号 (设计者规定)")
-    print(f"   吃食物奖励: +5")
-    print(f"   死亡惩罚:   -10")
-    print(f"   每步惩罚:   -0.1")
+    print("🐛 生物驱动统计")
+    print(f"   平均饥饿感: {stats['avg_hunger']:.3f}")
+    print(f"   平均恐惧感: {stats['avg_fear']:.3f}")
+    print(f"   平均奖励:   {stats['avg_intrinsic_reward']:.3f}")
+    print(f"   满足事件:   {stats['satisfaction_events']} (饥饿减少)")
+    print(f"   宽慰事件:   {stats['relief_events']} (恐惧减少)")
 
     print()
 
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Run Cogito Alpha simulation"
+        description="Run bio-inspired Cogito simulation"
     )
     parser.add_argument(
         "--steps",
@@ -118,7 +123,7 @@ def main():
         help="Number of simulation steps (default: 10000)",
     )
     parser.add_argument(
-        "--display",
+        "--visual",
         action="store_true",
         help="Show visualization (default: headless)",
     )
@@ -135,9 +140,15 @@ def main():
         help="Steps between checkpoints (default: 5000)",
     )
     parser.add_argument(
+        "--snapshot-interval",
+        type=int,
+        default=2000,
+        help="Steps between state snapshots (default: 2000)",
+    )
+    parser.add_argument(
         "--output-dir",
         type=str,
-        default="data/alpha",
+        default="data/bio",
         help="Output directory for checkpoints and logs",
     )
 
@@ -146,7 +157,9 @@ def main():
     # Create output directories
     output_dir = Path(args.output_dir)
     checkpoint_dir = output_dir / "checkpoints"
+    snapshot_dir = output_dir / "snapshots"
     checkpoint_dir.mkdir(parents=True, exist_ok=True)
+    snapshot_dir.mkdir(parents=True, exist_ok=True)
 
     # Set random seed
     rng = np.random.default_rng(args.seed)
@@ -155,17 +168,17 @@ def main():
     print_banner()
     print(f"📍 配置信息")
     print(f"   步数:           {args.steps}")
-    print(f"   模式:           {'可视化' if args.display else '无头'}")
+    print(f"   模式:           {'可视化' if args.visual else '无头'}")
     print(f"   随机种子:       {args.seed if args.seed else '随机'}")
     print(f"   检查点间隔:     {args.checkpoint_interval}")
     print(f"   输出目录:       {output_dir}")
     print()
 
     # Create simulation
-    sim = Simulation(
+    sim = BioSimulation(
         config=Config,
         rng=rng,
-        headless=not args.display,
+        headless=not args.visual,
         render_interval=10,
     )
 
@@ -196,15 +209,17 @@ def main():
             f"Step {steps_done:6d}/{args.steps} | "
             f"{steps_per_sec:5.1f} st/s | "
             f"Life: {stats['avg_lifespan']:5.0f} | "
-            f"Ent: {stats['avg_entropy']:.2f} | "
-            f"Loss: {stats['avg_prediction_loss']:.4f} | "
+            f"E: {stats['avg_energy']:5.1f} | "
+            f"H: {stats['avg_hunger']:.2f} | "
+            f"F: {stats['avg_fear']:.2f} | "
+            f"R: {stats['avg_intrinsic_reward']:+.2f} | "
             f"Food: {stats['total_food_eaten']:3d} | "
             f"D: {stats['total_deaths']:3d}"
         )
 
         # Save checkpoint
         if sim.step_count - last_checkpoint_step >= args.checkpoint_interval:
-            checkpoint_path = checkpoint_dir / f"alpha_step_{sim.step_count:06d}.pt"
+            checkpoint_path = checkpoint_dir / f"bio_step_{sim.step_count:06d}.pt"
             sim.save_checkpoint(str(checkpoint_path))
             last_checkpoint_step = sim.step_count
 
@@ -215,13 +230,13 @@ def main():
     print_final_stats(stats, elapsed, args.steps)
 
     # Save final checkpoint
-    final_path = checkpoint_dir / "final_alpha.pt"
-    sim.agent.save(str(final_path))
+    final_path = checkpoint_dir / "final_bio.pt"
+    sim.save_checkpoint(str(final_path))
     print(f"✅ 检查点已保存: {final_path}")
 
     sim.close()
     print()
-    print("🎉 Alpha 仿真完成!")
+    print("🎉 Bio 仿真完成!")
     print()
 
 

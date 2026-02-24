@@ -43,7 +43,7 @@ class StateAnalyzer:
     """Analyzes internal state vectors using dimensionality reduction and clustering.
 
     Process:
-        1. t-SNE: 710-dim -> 2-dim
+        1. t-SNE: internal_state_dim -> 2-dim
         2. DBSCAN: cluster in 2D space
         3. Correlation: compute mutual information with events
     """
@@ -67,6 +67,7 @@ class StateAnalyzer:
             config: Configuration class.
         """
         self.config = config or Config
+        self.internal_state_dim = 512 + 128 + self.config.NUM_ACTIONS + 64
 
         # t-SNE parameters
         self.perplexity = self.config.TSNE_PERPLEXITY
@@ -83,7 +84,7 @@ class StateAnalyzer:
         """Analyze internal states.
 
         Args:
-            internal_states: Array of shape (N, 710).
+            internal_states: Array of shape (N, internal_state_dim).
             behavior_data: Optional behavior data for correlation.
 
         Returns:

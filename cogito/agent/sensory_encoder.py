@@ -1,9 +1,4 @@
-"""Sensory encoder: 106-dim observation -> 64-dim encoded representation.
-
-A simple 2-layer MLP that compresses raw sensory input into an internal
-representation. This is purely feed-forward compression with no skip
-connections or attention mechanisms.
-"""
+"""Sensory encoder: observation -> encoded representation."""
 
 from __future__ import annotations
 
@@ -14,53 +9,63 @@ from cogito.config import Config
 
 
 class SensoryEncoder(nn.Module):
-    """2-layer MLP encoder for sensory observations.
-
-    Architecture:
-        Input: (batch, 106) or (106,)
-        Layer 1: 106 -> 128 with ReLU + LayerNorm
-        Layer 2: 128 -> 64 with ReLU
-        Output: (batch, 64) or (64,)
-
-    Parameter count: ~21,824
-        - Layer 1: 106*128 + 128 = 13,696
-        - Layer 2: 128*64 + 64 = 8,256
-        - Total: 21,952 (including LayerNorm)
-    """
+    """MLP encoder for sensory observations."""
 
     def __init__(
         self,
         input_dim: int | None = None,
         encoded_dim: int | None = None,
+        hidden_dim: int | None = None,
+        num_layers: int | None = None,
+        use_norm: bool | None = None,
     ):
         """Initialize the sensory encoder.
 
         Args:
-            input_dim: Input dimension (default: Config.SENSORY_DIM = 106).
+            input_dim: Input dimension (default: Config.SENSORY_DIM = 256).
             encoded_dim: Output dimension (default: Config.ENCODED_DIM = 64).
+            hidden_dim: Hidden layer width (default: Config.ENCODER_HIDDEN_DIM).
+            num_layers: Number of MLP layers (default: Config.ENCODER_NUM_LAYERS).
+            use_norm: Whether to apply LayerNorm (default: Config.ENCODER_USE_NORM).
         """
         super().__init__()
 
         self.input_dim = input_dim or Config.SENSORY_DIM
         self.encoded_dim = encoded_dim or Config.ENCODED_DIM
-        hidden_dim = 128  # Fixed intermediate size
+        self.hidden_dim = hidden_dim or Config.ENCODER_HIDDEN_DIM
+        self.num_layers = num_layers or Config.ENCODER_NUM_LAYERS
+        self.use_norm = Config.ENCODER_USE_NORM if use_norm is None else use_norm
 
-        self.net = nn.Sequential(
-            nn.Linear(self.input_dim, hidden_dim),
-            nn.ReLU(),
-            nn.LayerNorm(hidden_dim),
-            nn.Linear(hidden_dim, self.encoded_dim),
-            nn.ReLU(),
-        )
+        layers: list[nn.Module] = []
+
+        if self.num_layers <= 1:
+            layers.append(nn.Linear(self.input_dim, self.encoded_dim))
+            layers.append(nn.ReLU())
+        else:
+            layers.append(nn.Linear(self.input_dim, self.hidden_dim))
+            layers.append(nn.ReLU())
+            if self.use_norm:
+                layers.append(nn.LayerNorm(self.hidden_dim))
+
+            for _ in range(self.num_layers - 2):
+                layers.append(nn.Linear(self.hidden_dim, self.hidden_dim))
+                layers.append(nn.ReLU())
+                if self.use_norm:
+                    layers.append(nn.LayerNorm(self.hidden_dim))
+
+            layers.append(nn.Linear(self.hidden_dim, self.encoded_dim))
+            layers.append(nn.ReLU())
+
+        self.net = nn.Sequential(*layers)
 
     def forward(self, observation: torch.Tensor) -> torch.Tensor:
         """Encode observation to internal representation.
 
         Args:
-            observation: Input tensor of shape (batch, 106) or (106,).
+            observation: Input tensor of shape (batch, input_dim) or (input_dim,).
 
         Returns:
-            Encoded tensor of shape (batch, 64) or (64,).
+            Encoded tensor of shape (batch, encoded_dim) or (encoded_dim,).
         """
         return self.net(observation)
 

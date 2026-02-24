@@ -1,5 +1,29 @@
 # Memory.MD
 
+## 2026-02-24
+
+- Updated `cogito/world/grid.py` action list to include action 6 (interact no-op).
+
+- Fixed LSTM comment in `cogito/agent/recurrent_core.py` (71-dim input).
+
+- Added `test_interact_no_op` in `cogito/tests/test_grid.py` for action 6 behavior.
+
+- Ran `pytest cogito/tests/test_grid.py` (31 passed, 1 warning).
+
+- Updated `DNA方案.MD` with completion logs for tasks E.5-E.10.
+
+- Updated `繁衍.MD` with completion logs for tasks M.1-M.9 (noting long-run validation pending).
+
+- Updated `cogito/agent/cogito_agent.py` to store last log prob and use `OnlineLearner.learn_from_step` to avoid gradient issues.
+
+- Adjusted fertility timing in `cogito/world/evolution_world.py` to use step-start ages; synced age increment placement in `cogito/evolution/individual.py`.
+
+- Hardened `cogito/tests/test_reproduction.py` with dynamic empty positions; updated `test_agent` parameter count range.
+
+- Ran `pytest cogito/tests/test_agent.py cogito/tests/test_evolution_population.py cogito/tests/test_reproduction.py` (54 passed, 2 warnings).
+
+---
+
 ## 2026-02-23
 
 - Read docs/implementation_plan.md and docs/technical_plan.md for repo guidance.
@@ -363,3 +387,495 @@ cogito/
 - **总测试数**: 111 tests passed
 - **运行时间**: 56.53s (pytest)
 - **状态**: Phase 0-6 COMPLETE ✓
+
+---
+
+## 2026-02-23 (Session)
+
+- Read repository root listing and Memory.MD.
+
+- Pending: clarify scope for "debug all content".
+
+- Prepared memory summary and requested debug scope.
+
+- Ran `python run_maturation.py --steps 500` (headless default). Output: 6.0 steps/s, avg energy ~51.0, 0 deaths, 0 food eaten, pred loss 0.0000; SVC analyses=1, detections=0. Final checkpoint saved to `data/checkpoints/final_mature.pt`. Warning: torch FutureWarning about `pynvml` deprecation.
+
+- Ran cleanup script `C:/Users/peter/.config/opencode/tools/cleanup.ps1` (0 residual processes).
+
+- Ran `python run_maturation.py --steps 5000` (headless). Output: 12.9 minutes, 6.5 steps/s; progress snapshots showed avg lifespan ~95-100, avg energy ~49-51, deaths 10→51, pred loss 0.0054→0.0545, entropy ~1.75. Final summary printed avg energy 51.0, avg lifespan 0.0, deaths 0, food 0, pred loss 0.0000; SVC analyses=1, detections=0. Final checkpoint saved to `data/checkpoints/final_mature.pt`. Warning: torch FutureWarning about `pynvml` deprecation.
+
+- Ran cleanup script `C:/Users/peter/.config/opencode/tools/cleanup.ps1` (0 residual processes).
+
+---
+
+## 2026-02-24
+
+### 🐛 Bio 版本实现: 模拟真实生物行为
+
+新增一套完整的 Bio 版本系统，用于对比研究：
+
+#### 新增文件
+
+| 文件 | 说明 |
+|------|------|
+| `cogito/world/bio_grid.py` | 生物版网格世界，含气味场 |
+| `cogito/agent/bio_agent.py` | 生物版智能体，含内在驱动力 |
+| `cogito/agent/bio_learner.py` | 生物版学习器，内在奖励系统 |
+| `cogito/core/bio_simulation.py` | 生物版仿真循环 |
+| `run_bio.py` | 生物版运行脚本 |
+| `cogito/tests/test_bio.py` | Bio 版测试 (27 tests) |
+
+#### 核心特性
+
+**1️⃣ 气味场机制 (Scent Field)**
+- 食物散发气味，σ=10，扩散约30格范围
+- 智能体能感知当前位置的气味强度
+- 能感知四个方向的气味梯度，引导寻食
+
+**2️⃣ 扩展视野 (Extended Vision)**
+- 危险检测范围扩大到 10×10
+- 能感知危险的方向和距离
+
+**3️⃣ 内在驱动力 (Internal Drives)**
+- **饥饿感 (Hunger)**: 0=饱足, 1=饥饿
+- **恐惧感 (Fear)**: 基于危险距离计算
+
+**4️⃣ 内在奖励系统 (Intrinsic Reward)**
+```
+┌─────────────────────────────────────────────────────┐
+│  外部奖励 (Alpha版)     vs    内在奖励 (Bio版)       │
+├─────────────────────────────────────────────────────┤
+│  吃食物 = +5 (设计者规定)  │  饥饿时吃食物 = 高满足感 │
+│  死亡 = -10 (设计者规定)  │  死亡 = 恐惧程度×惩罚   │
+│  每步 = -0.1 (设计者规定) │  能量下降 = 不适感      │
+│                           │  逃离危险 = 宽慰感      │
+└─────────────────────────────────────────────────────┘
+```
+
+**5️⃣ 观察空间对比**
+```
+Alpha版: 106 维
+Bio版:   118 维 (新增 12 维生物特征)
+         [106] 饥饿感
+         [107] 恐惧感
+         [108-111] 食物气味梯度 (上下左右)
+         [112-115] 危险方向信号
+         [116] 当前位置气味强度
+         [117] 最小危险距离
+```
+
+#### 运行方式
+
+```bash
+# Alpha 版 (标准强化学习)
+python run_maturation.py --steps 10000
+
+# Bio 版 (内在驱动力)
+python run_bio.py --steps 10000
+```
+
+#### 设计理念
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                                                             │
+│  🤖 Alpha 版: "被训练的机器"                                 │
+│     • 外部奖励驱动                                          │
+│     • 通过试错学习最优策略                                  │
+│     • 不知道"为什么"要吃食物                               │
+│                                                             │
+│  🐛 Bio 版: "有本能的小生物"                                 │
+│     • 内在驱动力驱动                                        │
+│     • 饥饿时想找食物，恐惧时想逃离                          │
+│     • 奖励来自"感觉"变化                                    │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 2026-02-24 (Session)
+
+- Reviewed `DNA方案.MD` and `繁衍.MD`; extracted Phase 7 dependencies and module impacts (sensory_dim 256, num_actions 7, EvolutionWorld, continuous sim).
+
+- Prepared Phase 7 build order (M.1-M.8) ready to implement.
+
+- Quick scan of GA libs (PyGAD, DEAP); keep custom implementation to match in-world reproduction and constraints.
+
+- Confirmed current baseline: `Config.SENSORY_DIM = 106`, `Config.NUM_ACTIONS = 6`, `SensoryEncoder` and `ActionHead` match those sizes.
+
+- Implemented evolution core modules: `cogito/evolution/genome.py`, `operators.py`, `fitness.py`, `selection.py`, `epigenetics.py`.
+
+- Added `cogito/tests/test_evolution_core.py`; `pytest cogito/tests/test_evolution_core.py` passed (19 tests).
+
+- Updated `DNA方案.MD` with completion logs for tasks E.1-E.4.
+
+#### 测试结果
+
+- **Bio 专项测试**: 27 passed
+- **总测试数**: 138 tests (Alpha + Bio)
+
+---
+
+### 📊 日志系统完善
+
+两个版本的日志参数统一，便于对比研究：
+
+#### 新增统计参数
+
+| 类别 | 参数 | 说明 |
+|------|------|------|
+| **行为** | Food | 吃掉食物总数 |
+| | Food Rate | 食物效率 (食物/千步) |
+| | Action Distribution | 动作分布 (6个动作占比) |
+| **学习** | Survival Loss | 生存损失 |
+| | Prediction Loss | 预测损失 |
+| | Total Loss | 总损失 |
+| | Entropy | 策略熵 |
+| **内部状态** | Hidden Norm | 隐状态范数 |
+| | Hidden Var | 隐状态方差 |
+| **Bio特有** | Hunger | 平均饥饿感 |
+| | Fear | 平均恐惧感 |
+| | Intrinsic Reward | 平均内在奖励 |
+| | Satisfaction Events | 满足事件 (饥饿减少) |
+| | Relief Events | 宽慰事件 (恐惧减少) |
+
+#### 运行示例
+
+```
+🐛 Bio 版:
+Step 500 | Life: 100 | E: 49.5 | H: 0.49 | F: 0.03 | R: -0.11 | Food: 0 | D: 5
+
+🤖 Alpha 版:
+Step 500 | Life: 100 | Ent: 1.65 | Loss: 0.02 | Food: 0 | D: 5
+```
+
+---
+
+### 🧬 DNA 遗传机制设计
+
+#### 问题提出
+
+当前智能体可以无限次死亡重生，与真实生物不同：
+- 真实生物只有一次生命
+- 死亡恐惧是真实的
+- 生存本能刻在基因里
+
+#### 解决方案
+
+设计仿生 DNA 机制，让每个个体：
+1. 只有单次生命 (死亡 = 个体终结)
+2. DNA 可遗传 (优良特性跨代保留)
+3. 模拟真实生物基因表达
+
+#### 设计文档
+
+完整技术方案已写入 `DNA方案.TXT`，包含：
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  核心设计:                                                  │
+│                                                             │
+│  1. DNA 结构                                                │
+│     • 碱基序列 (ATCG 编码)                                  │
+│     • 双染色体 (父源 + 母源)                                │
+│     • 表观遗传标记                                          │
+│                                                             │
+│  2. 基因表达                                                │
+│     DNA ──转录──→ mRNA ──翻译──→ 蛋白质 ──→ 表型          │
+│                                                             │
+│  3. 高级机制                                                │
+│     • 显性/隐性基因                                         │
+│     • 基因调控网络                                          │
+│     • 表观遗传 (环境影响)                                   │
+│                                                             │
+│  4. 遗传操作                                                │
+│     • 突变 (点突变、插入、删除)                             │
+│     • 交叉重组                                              │
+│     • 自然选择                                              │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+```
+
+#### 三版本对比
+
+| 特性 | Alpha | Bio | DNA (待实现) |
+|------|-------|-----|--------------|
+| 生命次数 | 无限 | 无限 | 单次 |
+| 奖励来源 | 外部 | 内在 | 内在 |
+| 知识传递 | 权重保留 | 权重保留 | DNA遗传 |
+| 死亡恐惧 | 低 | 中 | 高 |
+| 研究价值 | 基线 | 本能对比 | 进化研究 |
+
+#### 待实现文件
+
+```
+cogito/evolution/
+├── dna.py              # DNA 类定义
+├── gene_expression.py  # 基因表达机制
+├── epigenetic.py       # 表观遗传
+├── mutation.py         # 突变操作
+├── selection.py        # 选择算法
+├── individual.py       # 个体类
+└── population.py       # 种群管理
+
+run_evolution.py        # 进化运行脚本
+```
+
+---
+
+## 项目状态汇总 (更新 2026-02-24)
+
+### 已完成模块
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  ✅ Phase 0: 基础设施 (网格世界、渲染器)                     │
+│  ✅ Phase 1: Cogito智能体 (编码器、LSTM、学习器)             │
+│  ✅ Phase 2: 监测基础设施 (数据采集、SVC检测)                │
+│  ✅ Phase 3: 基线运行 (maturation脚本)                       │
+│  ✅ Phase 4: 核心实验 (exp1-5)                               │
+│  ✅ Phase 5: 跨基质验证                                      │
+│  ✅ Phase 6: 分析模块                                        │
+│  ✅ Bio 版本 (内在驱动力、气味场)                            │
+│  ✅ 日志系统完善 (统一参数)                                  │
+│  📝 DNA 方案设计 (待实现)                                    │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### 运行脚本
+
+```bash
+# Alpha 版 (标准强化学习)
+python run_maturation.py --steps 10000
+
+# Bio 版 (内在驱动力)
+python run_bio.py --steps 10000
+
+# DNA 版 (待实现)
+python run_evolution.py --generations 100
+```
+
+---
+
+### 🧬 DNA 方案重大更新 (2026-02-24)
+
+#### 核心改进
+
+原方案改为更符合"进化不编码行为"原则的设计：
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  ❌ 旧方案：ATCG碱基 → 编码行为倾向                         │
+│     exploration_rate, fear_sensitivity, risk_aversion       │
+│                                                             │
+│  ✅ 新方案：24维浮点向量 → 只编码"大脑结构"                 │
+│     LSTM维度、层数、学习率、缓冲区大小...                   │
+└─────────────────────────────────────────────────────────────┘
+```
+
+#### 三条铁律
+
+1. **基因组编码结构，不编码行为**
+   - ✓ 允许: LSTM隐层维度, 学习率, 缓冲区大小
+   - ✗ 禁止: exploration_rate, fear_sensitivity
+
+2. **一条命**
+   - 个体死亡 = 永久终结
+   - 神经网络权重不保留
+   - 只有基因组传递到下一代
+
+3. **进化不知道意识**
+   - 适应度函数只关心生存指标
+   - 不包含任何"自我意识"奖励
+
+#### 基因组定义 (24维)
+
+| 类别 | 参数 | 范围 |
+|------|------|------|
+| 编码器 | hidden_dim, num_layers, use_norm | 32-256, 1-3, 0-1 |
+| 循环核心 | hidden_dim, num_layers, dropout | 32-256, 1-4, 0-0.3 |
+| 动作头 | hidden_dim, temperature | 16-128, 0.1-2.0 |
+| 预测头 | hidden_dim, depth | 16-128, 1-3 |
+| 学习 | learning_rate, gamma, weights... | 0.00005-0.003, ... |
+| 记忆 | buffer_size, batch_size, replay | 500-10000, 8-128, 0-1 |
+| 初始化 | weight_scale, bias_scale | 0.01-1.0, 0-0.5 |
+| 调节 | reward_death, reward_food, reward_step | -20~-1, 1-20, -1-0 |
+
+---
+
+### 💑 繁衍机制设计 (2026-02-24)
+
+#### 新增文件
+
+| 文件 | 说明 |
+|------|------|
+| `繁衍.TXT` | 世界内交配机制完整设计 |
+
+#### 核心设计
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                   世界内交配机制                            │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  🧬 个体属性扩展                                            │
+│     • sex: 性别 (♂/♀)                                      │
+│     • age: 年龄 (存活步数)                                  │
+│     • mating_cooldown: 交配冷却期                           │
+│     • libido: 交配欲望 (由内在状态计算)                      │
+│                                                             │
+│  💑 交配条件                                                │
+│     • 双方都成年 (age >= 200)                               │
+│     • 双方能量充足 (energy >= 40)                           │
+│     • 双方冷却结束                                          │
+│     • 性别相反 + 相邻位置                                   │
+│                                                             │
+│  👶 后代处理                                                │
+│     • 交配完成产生 1-2 个后代                               │
+│     • 在父母附近出生，立即独立生活                          │
+│     • 种群上限 100                                          │
+│                                                             │
+│  🔄 仿真模式                                                │
+│     • 连续模拟 (50万步)                                     │
+│     • 动态种群 (50-100)                                     │
+│     • 实时进化 (交配产生后代)                               │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+```
+
+#### 与原方案对比
+
+| 特性 | 原方案 (代际模式) | 新方案 (连续模式) |
+|------|-------------------|-------------------|
+| 模拟方式 | 固定代数 (100代) | 连续模拟 (50万步) |
+| 个体寿命 | 每代固定 (2000步) | 动态 (出生到死亡) |
+| 进化时机 | 代际更替时统一 | 实时 (交配产生后代) |
+| 种群大小 | 固定 (50) | 动态 (50-100) |
+| 性别 | 无 | 有 (♂♀) |
+| 配对方式 | 后台交叉 | 世界内交配 |
+
+---
+
+## 项目状态汇总 (更新 2026-02-24)
+
+### 已完成模块
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  ✅ Phase 0: 基础设施 (网格世界、渲染器)                     │
+│  ✅ Phase 1: Cogito智能体 (编码器、LSTM、学习器)             │
+│  ✅ Phase 2: 监测基础设施 (数据采集、SVC检测)                │
+│  ✅ Phase 3: 基线运行 (maturation脚本)                       │
+│  ✅ Phase 4: 核心实验 (exp1-5)                               │
+│  ✅ Phase 5: 跨基质验证                                      │
+│  ✅ Phase 6: 分析模块                                        │
+│  ✅ Bio 版本 (内在驱动力、气味场)                            │
+│  ✅ 日志系统完善 (统一参数)                                  │
+│  📝 DNA 方案设计 (24维浮点基因组，待实现)                    │
+│  📝 繁衍机制设计 (世界内交配，待实现)                        │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### 设计文档
+
+| 文件 | 内容 | 状态 |
+|------|------|------|
+| `DNA方案.TXT` | 基因组设计、个体生命周期、进化引擎 | 设计完成 |
+| `繁衍.TXT` | 世界内交配机制、种群动态管理 | 设计完成 |
+
+### 下一步
+
+1. 实现 evolution/ 模块
+2. 实现 EvolutionWorld 类
+3. 小规模验证运行
+4. 完整进化模拟
+
+---
+
+### 📋 设计文档更新 (2026-02-24)
+
+#### 文档格式更新
+
+| 旧文件 | 新文件 | 说明 |
+|--------|--------|------|
+| `DNA方案.TXT` | `DNA方案.MD` | 进化模块技术文档 |
+| `繁衍.TXT` | `繁衍.MD` | 繁衍机制技术文档 |
+
+#### 繁衍方案补充（问题A修复）
+
+**问题**：种群注入使用随机基因组，稀释进化成果
+
+**解决**：从现有种群采样 + 突变，而非完全随机
+
+```python
+# 修改前
+child = Individual(genome=Genome(), ...)  # 随机基因组
+
+# 修改后
+parent = np.random.choice(alive)  # 从现有种群采样
+new_genes = GeneticOperators.mutate(parent.genome, rate=0.15)
+child = Individual(genome=new_genes, ...)  # 变异后代
+```
+
+---
+
+### 🚀 Phase 7 施工清单
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  Phase 7: 进化与繁衍模块                                    │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  ☐ M.1 感官系统扩展 (170维 → 256维)                        │
+│  ☐ M.2 动作空间扩展 (6动作 → 7动作，新增交互)              │
+│  ☐ M.3 个体类繁衍属性 (sex, age, mating_cooldown...)       │
+│  ☐ M.4 进化世界类 (多体管理、社会感知、交配处理)            │
+│  ☐ M.5 种群守护 (防灭绝，含问题A修复)                       │
+│  ☐ M.6 进化监测 (种群动态、基因组趋势)                      │
+│  ☐ M.7 连续仿真主循环                                       │
+│  ☐ M.8 集成测试                                             │
+│  ☐ M.9 长时间运行与分析                                     │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+
+---
+
+## 2026-02-24 (Session 2) - Phase 7 验收测试
+
+### 测试配置与结果
+
+```
+配置: 10个体, 200步
+总时间: 37.8秒
+平均速度: 5.3 steps/sec
+测试通过: 173 tests
+```
+
+| Step | 种群 | 死亡 | 交配 | 多样性 |
+|------|------|------|------|--------|
+| 50   | 10   | 0    | 0    | 2486   |
+| 100  | 5    | 8    | 0    | 1921   |
+| 150  | 9    | 1    | 0    | 2262   |
+| 200  | 5    | 5    | 0    | 1988   |
+
+### 发现的问题
+
+1. **`--small` 模式参数太大**: 20个体 × 20代 × 500步 = 200,000步，需55+小时
+2. **神经网络参数量差异大**: 首个个体1.3M参数，后续164K参数 (基因组随机采样)
+3. **速度瓶颈**: 每步需为每个个体做前向+反向传播
+
+### 性能估算
+
+| 个体数 | 速度 (sps) | 1000步耗时 |
+|--------|------------|------------|
+| 10     | 5.3        | 3分钟      |
+| 20     | ~2.6       | 6分钟      |
+| 50     | ~1.0       | 17分钟     |
+
+### 待优化方向
+
+- [ ] 限制基因组参数范围，减少网络大小
+- [ ] 调整 `--small` 模式参数
+- [ ] 考虑批量并行处理
+```

@@ -4,15 +4,18 @@ from __future__ import annotations
 
 import tempfile
 from pathlib import Path
+from typing import cast
 
 import numpy as np
 import pytest
 
+from cogito.agent.cogito_agent import CogitoAgent
 from cogito.config import Config
 from cogito.monitoring.complexity_metrics import ComplexityMetrics
 from cogito.monitoring.data_collector import DataCollector
 from cogito.monitoring.state_analyzer import StateAnalyzer
 from cogito.monitoring.svc_detector import SVCDetector
+from cogito.world.grid import CogitoWorld
 
 
 # === DataCollector Tests ===
@@ -46,8 +49,8 @@ class TestDataCollector:
                 class MockWorld:
                     pass
 
-                agent = MockAgent()
-                world = MockWorld()
+                agent = cast(CogitoAgent, MockAgent())
+                world = cast(CogitoWorld, MockWorld())
 
                 info = {
                     "pos_x": 32,
@@ -68,14 +71,15 @@ class TestDataCollector:
         """Internal states are recorded at intervals."""
         with tempfile.TemporaryDirectory() as tmpdir:
             with DataCollector(data_dir=tmpdir) as collector:
+
                 class MockAgent:
                     current_lifespan = 100
 
                 class MockWorld:
                     pass
 
-                agent = MockAgent()
-                world = MockWorld()
+                agent = cast(CogitoAgent, MockAgent())
+                world = cast(CogitoWorld, MockWorld())
 
                 # Collect many steps
                 for step in range(100):
@@ -83,7 +87,7 @@ class TestDataCollector:
                         "pos_x": 32,
                         "pos_y": 32,
                         "energy": 50.0,
-                        "action": step % 6,
+                        "action": step % Config.NUM_ACTIONS,
                         "reward": -0.1,
                         "done": False,
                         "entropy": 1.5,
@@ -96,20 +100,21 @@ class TestDataCollector:
                 # Should have ~10 records (every 10 steps)
                 states = collector.get_internal_states()
                 assert states.shape[0] >= 8  # Some tolerance
-                assert states.shape[1] == 710
+                assert states.shape[1] == 512 + 128 + Config.NUM_ACTIONS + 64
 
     def test_learning_curve(self):
         """get_learning_curve returns data."""
         with tempfile.TemporaryDirectory() as tmpdir:
             with DataCollector(data_dir=tmpdir) as collector:
+
                 class MockAgent:
                     current_lifespan = 100
 
                 class MockWorld:
                     pass
 
-                agent = MockAgent()
-                world = MockWorld()
+                agent = cast(CogitoAgent, MockAgent())
+                world = cast(CogitoWorld, MockWorld())
 
                 # Record learning data
                 for step in range(10):
@@ -150,7 +155,9 @@ class TestStateAnalyzer:
         analyzer = StateAnalyzer()
 
         # Generate sample internal states
-        states = np.random.randn(500, 710).astype(np.float32)
+        states = np.random.randn(500, 512 + 128 + Config.NUM_ACTIONS + 64).astype(
+            np.float32
+        )
 
         result = analyzer.analyze(states)
 
@@ -168,9 +175,13 @@ class TestStateAnalyzer:
         states = []
         for i in range(n_clusters):
             # Create distinct clusters with large separation
-            center = np.zeros(710)
+            center = np.zeros(512 + 128 + Config.NUM_ACTIONS + 64)
             center[i * 100 : i * 100 + 50] = 5.0  # Distinct pattern
-            cluster_states = center + np.random.randn(n_per_cluster, 710) * 0.3
+            cluster_states = (
+                center
+                + np.random.randn(n_per_cluster, 512 + 128 + Config.NUM_ACTIONS + 64)
+                * 0.3
+            )
             states.append(cluster_states)
 
         states = np.vstack(states).astype(np.float32)
@@ -185,7 +196,9 @@ class TestStateAnalyzer:
         """analyze() handles small samples."""
         analyzer = StateAnalyzer()
 
-        states = np.random.randn(20, 710).astype(np.float32)
+        states = np.random.randn(20, 512 + 128 + Config.NUM_ACTIONS + 64).astype(
+            np.float32
+        )
         result = analyzer.analyze(states)
 
         # Should not crash
