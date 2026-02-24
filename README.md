@@ -2,6 +2,7 @@
 
 **An experimental framework for studying emergent consciousness markers in artificial agents.**
 
+[![Version](https://img.shields.io/badge/Version-0.1.0-orange.svg)](VERSION)
 [![Python 3.11](https://img.shields.io/badge/Python-3.11-blue.svg)](https://www.python.org/)
 [![Tests](https://img.shields.io/badge/Tests-173%20passed-green.svg)]()
 [![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
@@ -95,27 +96,119 @@ pip install -r requirements.txt
 pytest
 ```
 
-### Run Simulations
+### Run Simulations Locally
 
 ```bash
-# Standard agent maturation (100K steps)
-python run_maturation.py --steps 10000
+# Quick test (10 generations, small population)
+python run_evolution.py --small --generations 10
 
-# Bio-inspired agent with intrinsic drives
+# Standard evolution (50 population × 20 generations × 500 lifespan)
+python run_evolution.py --population 50 --generations 20 --lifespan 500
+
+# Long evolution (recommended for meaningful results)
+python run_evolution.py --population 50 --generations 100 --lifespan 1000
+
+# Bio-inspired agent
 python run_bio.py --steps 10000
 
-# Evolution with reproduction (GPU recommended)
-python run_evolution.py --small --generations 10
+# Continuous evolution with reproduction
 python run_continuous_evolution.py --steps 50000
 ```
 
-### Google Colab (Free GPU)
+---
 
-Open in Colab: [evolution_colab.ipynb](notebooks/evolution_colab.ipynb)
+## 🚀 Google Colab (Free GPU - Recommended)
 
-1. Enable GPU: Runtime → Change runtime type → T4 GPU
-2. Run all cells
-3. Results saved to Google Drive
+### Why Use Colab?
+
+- **Free T4 GPU**: 5-10x faster than CPU
+- **No local setup**: Everything runs in browser
+- **Auto-save to GitHub**: Results automatically pushed
+
+### Step-by-Step Guide
+
+#### 1. Open the Notebook
+
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/peter941221/Cogito/blob/main/notebooks/evolution_colab.ipynb)
+
+Or go to: `File → Open notebook → GitHub → peter941221/Cogito → notebooks/evolution_colab.ipynb`
+
+#### 2. Enable GPU Runtime
+
+```
+Runtime → Change runtime type → T4 GPU → Save
+```
+
+Verify GPU is enabled:
+```
+GPU: Tesla T4
+Memory: 15.0 GB
+Status: GPU ENABLED
+```
+
+#### 3. Set Up GitHub Access (Optional but Recommended)
+
+1. Go to https://github.com/settings/tokens
+2. Click "Generate new token (classic)"
+3. Select `repo` scope
+4. Copy the token
+5. In Colab, click the 🔑 key icon (Secrets)
+6. Add secret:
+   - Name: `GITHUB_TOKEN`
+   - Value: your_token_here
+7. Enable "Notebook access"
+
+#### 4. Choose Configuration
+
+In the notebook, find this cell and modify:
+
+```python
+CONFIG = "long"  # Options: "quick", "standard", "deep", "long", "full"
+```
+
+**Configuration Comparison:**
+
+| Config | Population | Generations | Lifespan | Time (est.) | Total Lives |
+|--------|------------|-------------|----------|-------------|-------------|
+| quick | 30 | 10 | 300 | ~3 min | 300 |
+| standard | 50 | 20 | 500 | ~10 min | 1,000 |
+| deep | 50 | 50 | 500 | ~25 min | 2,500 |
+| **long** | **50** | **100** | **1000** | **~2 hours** | **5,000** |
+| full | 100 | 100 | 1000 | ~4 hours | 10,000 |
+
+**Recommendation:** Start with `standard` for testing, then run `long` overnight.
+
+#### 5. Run All Cells
+
+Click `Runtime → Run all` or press `Ctrl+F9`
+
+#### 6. Monitor Progress
+
+Watch for generation outputs:
+```
+============================================================
+Generation 0
+============================================================
+  Avg Fitness:   130.1
+  Best Fitness:  215.4
+  Avg Lifespan:  101
+  Avg Food:      0.1    ← Key metric to watch
+  Diversity:     3327.00
+```
+
+**Expected Evolution:**
+- Gen 0-30: Random exploration (Avg Food ~0.2)
+- Gen 30-70: Learning begins (Avg Food ~1.0)
+- Gen 70-100: Strategy optimization (Avg Food ~2.0+)
+
+#### 7. Download or Push Results
+
+**Option A: Push to GitHub** (if token configured)
+- Results automatically pushed to new branch
+- Branch name: `evolution-results/long-YYYYMMDD_HHMMSS`
+
+**Option B: Download locally**
+- Run the last cell to download `evolution_results.zip`
 
 ---
 
@@ -178,6 +271,26 @@ The genome encodes **structure**, not behavior:
    - Fitness = survival metrics only
    - No "self-awareness" rewards
 
+### Performance Optimization (v0.1.0)
+
+The system uses **sparse learning** for 5x speedup:
+- `LEARN_EVERY = 5`: Backpropagation only happens every 5 steps
+- Research shows this can improve generalization
+- Reduces GPU memory usage
+
+---
+
+## World Parameters (v0.1.0)
+
+| Parameter | Value | Description |
+|-----------|-------|-------------|
+| WORLD_SIZE | 64×64 | Grid dimensions |
+| NUM_FOOD | 40 | Food tiles (0.98% density) |
+| FOOD_ENERGY | 30 | Energy gained per food |
+| INITIAL_ENERGY | 150 | Starting energy |
+| STEP_COST | 1 | Energy lost per step |
+| MATURITY_AGE | 50 | Steps before can reproduce |
+
 ---
 
 ## Consciousness Experiments
@@ -197,6 +310,8 @@ The genome encodes **structure**, not behavior:
 - **Approximate Entropy (ApEn)**: Regularity of internal state sequences
 - **Permutation Entropy**: Complexity of hidden dynamics
 - **Self-Vector Clusters (SVC)**: Isolated neural patterns correlated with self-related events
+- **Avg Food**: Average food eaten per individual (key evolution indicator)
+- **Diversity**: Genetic diversity in population (should remain >2000)
 
 ---
 
@@ -229,6 +344,27 @@ The genome encodes **structure**, not behavior:
 - Python 3.10+
 - PyTorch 2.0+
 - NumPy, Matplotlib, scikit-learn, scipy
+
+---
+
+## Changelog
+
+### v0.1.0 (2026-02-24)
+
+**New Features:**
+- Learning frequency optimization (LEARN_EVERY=5) for 5x speedup
+- GPU acceleration support (CUDA device parameter)
+- Colab notebook with multiple config presets
+
+**Parameters Adjusted:**
+- NUM_FOOD: 30 → 40
+- FOOD_ENERGY: 25 → 30
+- INITIAL_ENERGY: 120 → 150
+- MATURITY_AGE: 100 → 50
+
+**Bug Fixes:**
+- Fixed device mismatch for GPU training
+- Fixed tensor creation on wrong device in learner.py
 
 ---
 
