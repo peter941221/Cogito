@@ -2,7 +2,7 @@
 
 **An experimental framework for studying emergent consciousness markers in artificial agents.**
 
-[![Version](https://img.shields.io/badge/Version-0.1.0-orange.svg)](VERSION)
+[![Version](https://img.shields.io/badge/Version-0.1.1-orange.svg)](VERSION)
 [![Python 3.11](https://img.shields.io/badge/Python-3.11-blue.svg)](https://www.python.org/)
 [![Tests](https://img.shields.io/badge/Tests-173%20passed-green.svg)]()
 [![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
@@ -28,6 +28,155 @@ The project is inspired by the Global Workspace Theory and Integrated Informatio
 │                                                             │
 │  We don't program consciousness.                           │
 │  We create conditions where it might emerge.                │
+└─────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 🧠 Philosophical Significance
+
+### The Hard Problem of Consciousness
+
+David Chalmers' "hard problem" asks: *Why does subjective experience exist at all?* Why doesn't information processing happen "in the dark," without any inner feeling?
+
+Cogito approaches this from an **emergentist** perspective:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  Traditional AI Approach:                                   │
+│  ─────────────────────────────────────────────────────────  │
+│  Programmer → Architecture → Behavior                       │
+│                                                             │
+│  Cogito's Approach:                                         │
+│  ─────────────────────────────────────────────────────────  │
+│  Evolution → Architecture → Behavior → Emergence?           │
+│       ↑                                           ↑         │
+│  No programmer                          Unknown territory   │
+│  decides the                           that might reveal    │
+│  structure                             something profound    │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Three Philosophical Positions
+
+| Position | View | Cogito's Test |
+|----------|------|---------------|
+| **Functionalist** | Consciousness = functional organization | If evolved agents show consciousness markers, functionalism gains support |
+| **Emergentist** | Consciousness emerges from complexity at certain thresholds | We observe what happens at increasing complexity levels |
+| **Mysterian** | Consciousness is fundamentally beyond our understanding | Either we see something, or we don't - both are informative |
+
+### Why This Matters
+
+**1. The Anthropic Question**
+
+How did human consciousness arise? We cannot replay human evolution, but we can simulate analogous processes:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                                                             │
+│  Human Evolution:    ~6 million years → Consciousness       │
+│                          (one data point)                   │
+│                                                             │
+│  Cogito Simulation:  ~100 generations → ???                 │
+│                          (many experiments possible)        │
+│                                                             │
+│  Question: Are there CONVERGENT paths to consciousness?     │
+│  If different simulations arrive at similar patterns,       │
+│  this suggests consciousness might be inevitable            │
+│  under certain conditions - not a fluke.                    │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**2. Substrate Independence**
+
+If consciousness-like patterns can emerge in silicon:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                                                             │
+│  Biological neurons ←→ Artificial neurons                   │
+│        ↓                        ↓                           │
+│  Same functional patterns → Same emergent properties?       │
+│                                                             │
+│  This tests whether consciousness is:                       │
+│  • Tied to biology (substrate-dependent)                    │
+│  • Tied to computation (substrate-independent)              │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**3. The Self Without a Self-Model**
+
+Most AI systems with "self-awareness" have explicit self-models programmed in. Cogito asks:
+
+> *Can an agent develop self-related neural patterns WITHOUT being told it has a self?*
+
+This is closer to how biological consciousness likely evolved - not because someone programmed a self-model, but because survival required it.
+
+### The "Three Iron Laws" as Philosophical Commitments
+
+Our constraints are not arbitrary - they reflect deep philosophical positions:
+
+| Iron Law | Philosophical Basis |
+|----------|---------------------|
+| **Genome encodes structure, not behavior** | Consciousness is not programmed; it emerges from structure |
+| **One life only** | Death gives meaning to survival; authentic stakes create authentic behavior |
+| **Evolution doesn't know about consciousness** | If consciousness emerges, it must be a SIDE EFFECT of survival optimization |
+
+The third iron law is most crucial: we deliberately do NOT reward "self-awareness" or any consciousness-related behavior. If it appears, it appears because it was USEFUL for survival, not because we asked for it.
+
+### What Would Count as Evidence?
+
+We look for "markers" that suggest consciousness-like processes:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                                                             │
+│  Neural Complexity:                                         │
+│  • High entropy in internal states                          │
+│  • Distinct patterns for self-related vs other events       │
+│                                                             │
+│  Behavioral Sophistication:                                 │
+│  • Planning beyond immediate rewards                        │
+│  • Recognition of self in mirror (Exp 2)                    │
+│  • Protection of self-interest even against reward (Exp 3)  │
+│                                                             │
+│  Information Integration:                                   │
+│  • Unified internal representation                          │
+│  • Cross-modal pattern matching                             │
+│  • Consistent self-symbol across contexts (Exp 4)           │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Humility and Open Questions
+
+Cogito does NOT claim to:
+
+- ❌ Create conscious beings
+- ❌ Solve the hard problem
+- ❌ Prove functionalism or emergentism
+
+Cogito DOES aim to:
+
+- ✅ Create a rigorous experimental framework
+- ✅ Generate data for philosophical debate
+- ✅ Explore a middle ground between philosophy and engineering
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                                                             │
+│  "Cogito, ergo sum" - Descartes                             │
+│  "I think, therefore I am"                                  │
+│                                                             │
+│  This project asks the inverse:                             │
+│  "Sum, ergo cogito?"                                        │
+│  "I am (simulated), therefore I think?"                     │
+│                                                             │
+│  The answer remains unknown.                                │
+│  But the question is worth asking.                          │
+│                                                             │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -348,6 +497,16 @@ The system uses **sparse learning** for 5x speedup:
 ---
 
 ## Changelog
+
+### v0.1.1 (2026-02-24)
+
+**Documentation:**
+- Added comprehensive "Philosophical Significance" section
+- Discussed the Hard Problem of Consciousness
+- Explained three philosophical positions (Functionalist, Emergentist, Mysterian)
+- Added substrate independence discussion
+- Explained "Three Iron Laws" as philosophical commitments
+- Described evidence criteria for consciousness-like patterns
 
 ### v0.1.0 (2026-02-24)
 
