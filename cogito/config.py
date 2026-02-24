@@ -55,6 +55,7 @@ class Config:
     SURVIVAL_LOSS_WEIGHT: ClassVar[float] = 1.0  # Survival loss weight
     REPLAY_RATIO: ClassVar[float] = 0.0  # Replay frequency
     GRAD_CLIP: ClassVar[float] = 1.0  # Gradient clipping
+    LEARN_EVERY: ClassVar[int] = 5  # Learn every N steps (speed optimization)
 
     # Reward parameters (default baseline)
     REWARD_DEATH: ClassVar[float] = -10.0

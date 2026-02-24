@@ -223,8 +223,10 @@ class Individual:
             else world.get_observation(self.position)
         )
 
+        # Learn only every N steps (speed optimization)
         learn_info = None
-        if hasattr(self.brain, "observe_result"):
+        should_learn = (self.age % Config.LEARN_EVERY == 0) or (self.energy <= 0)
+        if should_learn and hasattr(self.brain, "observe_result"):
             learn_info = self.brain.observe_result(
                 observation,
                 next_obs,
