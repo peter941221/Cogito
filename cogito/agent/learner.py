@@ -85,16 +85,19 @@ class OnlineLearner:
         """
         self.optimizer.zero_grad()
 
-        # Convert observations to tensors
-        obs_tensor = torch.tensor(observation, dtype=torch.float32)
-        next_obs_tensor = torch.tensor(next_observation, dtype=torch.float32)
+        # Get device from model
+        device = next(self.agent.parameters()).device
+
+        # Convert observations to tensors on correct device
+        obs_tensor = torch.tensor(observation, dtype=torch.float32, device=device)
+        next_obs_tensor = torch.tensor(next_observation, dtype=torch.float32, device=device)
 
         # Forward pass through encoder
         encoded = self.agent.encoder(obs_tensor)
         next_encoded = self.agent.encoder(next_obs_tensor).detach()
 
         # Get action one-hot for previous action
-        prev_action_onehot = torch.zeros(self.agent_config.num_actions)
+        prev_action_onehot = torch.zeros(self.agent_config.num_actions, device=device)
         prev_action_onehot[self.agent.prev_action] = 1.0
 
         # Detach hidden state to avoid backward through previous steps
@@ -107,7 +110,7 @@ class OnlineLearner:
         prediction = self.agent.prediction_head(core_output)
 
         # Compute losses
-        log_prob_tensor = torch.tensor(log_prob, requires_grad=False)
+        log_prob_tensor = torch.tensor(log_prob, requires_grad=False, device=device)
         survival_loss = -log_prob_tensor * reward
         prediction_loss = self.mse_loss(prediction, next_encoded)
 
@@ -192,10 +195,13 @@ class OnlineLearner:
         """
         self.optimizer.zero_grad()
 
+        # Get device from model
+        device = next(self.agent.parameters()).device
+
         # Survival loss (REINFORCE)
         # L_survival = -log_prob * reward
         # Note: We use the stored log_prob as a baseline reference
-        log_prob_tensor = torch.tensor(log_prob, requires_grad=False)
+        log_prob_tensor = torch.tensor(log_prob, requires_grad=False, device=device)
         survival_loss = -log_prob_tensor * reward
 
         # Prediction loss (MSE)
@@ -243,9 +249,12 @@ class OnlineLearner:
         """
         self.optimizer.zero_grad()
 
-        # Convert to tensors with gradients
-        observations = torch.tensor(batch.observations, dtype=torch.float32)
-        next_observations = torch.tensor(batch.next_observations, dtype=torch.float32)
+        # Get device from model
+        device = next(self.agent.parameters()).device
+
+        # Convert to tensors with gradients on correct device
+        observations = torch.tensor(batch.observations, dtype=torch.float32, device=device)
+        next_observations = torch.tensor(batch.next_observations, dtype=torch.float32, device=device)
 
         # Forward pass to get predictions
         encoded = self.agent.encoder(observations)
