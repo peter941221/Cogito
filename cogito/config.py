@@ -13,10 +13,10 @@ class Config:
 
     # World parameters
     WORLD_SIZE: ClassVar[int] = 64  # Grid size (width and height)
-    NUM_FOOD: ClassVar[int] = 30  # Total food tiles (increased for better survival)
+    NUM_FOOD: ClassVar[int] = 40  # Total food tiles (increased for better survival)
     NUM_DANGER: ClassVar[int] = 8  # Total danger tiles
     NUM_WALLS: ClassVar[int] = 40  # Total wall tiles
-    FOOD_ENERGY: ClassVar[int] = 25  # Energy gain per food (increased)
+    FOOD_ENERGY: ClassVar[int] = 30  # Energy gain per food (increased)
     DANGER_PENALTY: ClassVar[int] = 10  # Energy loss per danger tile
     STEP_COST: ClassVar[int] = 1  # Energy cost per step
     FOOD_RESPAWN_DELAY: ClassVar[int] = 0  # Steps before food respawns
@@ -25,7 +25,7 @@ class Config:
     ECHO_DELAY: ClassVar[int] = 3  # Echo delay steps (exp2)
 
     # Agent parameters
-    INITIAL_ENERGY: ClassVar[int] = 120  # Starting energy (increased)
+    INITIAL_ENERGY: ClassVar[int] = 150  # Starting energy (increased)
     MAX_ENERGY: ClassVar[int] = 100  # Maximum energy
     VIEW_RANGE: ClassVar[int] = 3  # Vision radius (7x7)
     SENSORY_DIM: ClassVar[int] = 256  # Observation dimension
