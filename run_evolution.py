@@ -5,6 +5,8 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
+import torch
+
 import numpy as np
 
 from cogito.analysis.evolution_analysis import EvolutionAnalyzer
@@ -21,9 +23,22 @@ def main() -> None:
     parser.add_argument("--checkpoint-interval", type=int, default=10)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--output-dir", type=str, default=None)
+    parser.add_argument(
+        "--device",
+        type=str,
+        default=None,
+        choices=["cpu", "cuda"],
+        help="Device for computation (default: auto-detect GPU)",
+    )
     args = parser.parse_args()
 
     rng = np.random.default_rng(args.seed)
+
+    # Determine device
+    if args.device:
+        device = torch.device(args.device)
+    else:
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     class RunConfig(Config):
         POPULATION_SIZE = args.population or Config.POPULATION_SIZE
@@ -35,7 +50,7 @@ def main() -> None:
         RunConfig.NUM_GENERATIONS = 20
         RunConfig.GENERATION_LIFESPAN = 500
 
-    sim = EvolutionSimulation(config=RunConfig, rng=rng)
+    sim = EvolutionSimulation(config=RunConfig, rng=rng, device=device)
     sim.run_generational(
         num_generations=RunConfig.NUM_GENERATIONS,
         lifespan=RunConfig.GENERATION_LIFESPAN,

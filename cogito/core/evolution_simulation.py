@@ -5,6 +5,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import torch
+
 import numpy as np
 from numpy.random import Generator
 
@@ -26,11 +28,25 @@ class EvolutionSimulation:
         self,
         config: type[Config] | None = None,
         rng: Generator | None = None,
+        device: torch.device | str | None = None,
     ) -> None:
         self.config = config or Config
         self.rng = rng or np.random.default_rng()
 
-        self.population = Population(self.config.POPULATION_SIZE, self.config, self.rng)
+        # Device for GPU acceleration
+        if device is None:
+            self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        else:
+            self.device = torch.device(device)
+
+        if self.device.type == "cuda":
+            print(f"Using GPU: {torch.cuda.get_device_name(0)}")
+        else:
+            print("Using CPU (no GPU detected)")
+
+        self.population = Population(
+            self.config.POPULATION_SIZE, self.config, self.rng, device=self.device
+        )
         self.lineage = LineageTracker()
         self.world = EvolutionWorld(self.config, rng=self.rng, lineage=self.lineage)
         self.guard = PopulationGuard(self.config)

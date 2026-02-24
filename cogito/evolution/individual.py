@@ -6,6 +6,8 @@ import itertools
 from dataclasses import dataclass
 from typing import Any
 
+import torch
+
 import numpy as np
 from numpy.random import Generator
 
@@ -52,11 +54,18 @@ class Individual:
         rng: Generator | None = None,
         brain: CogitoAgent | Any | None = None,
         learner: OnlineLearner | None = None,
+        device: torch.device | str | None = None,
     ) -> None:
         self.id = (
             int(individual_id) if individual_id is not None else next(self._id_counter)
         )
         self.rng = rng or np.random.default_rng()
+
+        # Device for GPU acceleration
+        if device is None:
+            self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        else:
+            self.device = torch.device(device)
 
         self.genome = genome or Genome(rng=self.rng)
         self.epigenetic = epigenetic or EpigeneticMarks()
@@ -134,7 +143,7 @@ class Individual:
     def _build_brain(self) -> CogitoAgent:
         """Construct a new brain from genome parameters."""
         agent_config = self._genome_to_agent_config()
-        agent = CogitoAgent(agent_config)
+        agent = CogitoAgent(agent_config, device=self.device)
         self._apply_weight_init(agent)
         return agent
 

@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+import torch
+
 import numpy as np
 from numpy.random import Generator
 
@@ -41,10 +43,17 @@ class Population:
         size: int | None = None,
         config: type[Config] | None = None,
         rng: Generator | None = None,
+        device: torch.device | str | None = None,
     ) -> None:
         self.config = config or Config
         self.size = size or self.config.POPULATION_SIZE
         self.rng = rng or np.random.default_rng()
+
+        # Device for GPU acceleration
+        if device is None:
+            self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        else:
+            self.device = torch.device(device)
 
         self.individuals: list[Individual] = []
         self.generation = 0
@@ -72,6 +81,7 @@ class Population:
                 individual_id=i,
                 generation=0,
                 rng=self.rng,
+                device=self.device,
             )
             for i in range(self.size)
         ]
@@ -106,6 +116,7 @@ class Population:
                     generation=self.generation + 1,
                     rng=self.rng,
                     parent_ids=elite.parent_ids,
+                    device=self.device,
                 )
             )
 
@@ -170,6 +181,7 @@ class Population:
                     generation=self.generation + 1,
                     rng=self.rng,
                     parent_ids=(parent1.id, parent2.id),
+                    device=self.device,
                 )
             )
             idx += 1
@@ -186,6 +198,7 @@ class Population:
                         generation=self.generation + 1,
                         rng=self.rng,
                         parent_ids=(parent2.id, parent1.id),
+                        device=self.device,
                     )
                 )
                 idx += 1
