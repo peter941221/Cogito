@@ -1,57 +1,60 @@
-# AGENTS.md - Project Genesis: Cogito
+# AGENTS.md - Project Cogito
 # Instructions for agentic coding in this repo.
 
-## Repository status
+## Repository Status
 
-- This workspace contains docs and initial scaffolding only.
-
+- This workspace is fully implemented with 173 tests passing.
 - Source of truth: docs/implementation_plan.md and docs/technical_plan.md.
+- Project Memory: Memory.MD (Chinese, not for public)
 
-- Commands below are expected defaults until tooling exists.
-
-## Environment setup (from docs)
+## Environment Setup
 
 - Python 3.10+ is required.
 
-- Create venv: python -m venv venv
+- Create venv: `python -m venv venv`
 
-- Activate (Windows): venv\Scripts\activate
+- Activate (Windows): `venv\Scripts\activate`
 
-- Activate (POSIX): source venv/bin/activate
+- Activate (POSIX): `source venv/bin/activate`
 
-- Install core deps:
+- Install dependencies:
 
+  ```bash
   pip install -r requirements.txt
+  ```
 
-## Build / run / test / lint
+## Build / Run / Test / Lint
 
 - Build: none (pure Python). Run modules and scripts directly.
 
-- Run examples (when implemented):
+- Run simulations:
 
-  python cogito/core/simulation.py
+  ```bash
+  python run_maturation.py --steps 10000      # Standard agent
+  python run_bio.py --steps 10000              # Bio-inspired agent
+  python run_evolution.py --small              # Evolution (generational)
+  python run_continuous_evolution.py --steps 5000  # Evolution (continuous)
+  ```
 
-  python run_maturation.py
+- Test all: `pytest`
 
-- Test all: pytest
+- Test single file: `pytest cogito/tests/test_phase0.py`
 
-- Test single file: pytest cogito/tests/test_phase0.py
+- Test single test: `pytest cogito/tests/test_phase0.py::TestClass::test_name`
 
-- Test single test: pytest cogito/tests/test_phase0.py::TestClass::test_name
-
-- Test by pattern: pytest cogito/tests/test_phase0.py -k "topology"
+- Test by pattern: `pytest cogito/tests/test_phase0.py -k "topology"`
 
 - Lint/format: no tool configured yet. If added, prefer:
 
+  ```bash
   ruff check .
-
   ruff format .
-
   black .
+  ```
 
 - Type check: no tool configured yet. If added, use mypy.
 
-## Code style (Python)
+## Code Style (Python)
 
 - Formatting: Black-compatible style, 88 char line length, trailing commas.
 
@@ -67,7 +70,7 @@
 
 - Docstrings: include tensor/array shapes (e.g., (106,), (batch, 64)).
 
-## Domain constraints (hard rules)
+## Domain Constraints (Hard Rules)
 
 - Do not add any self-awareness features or naming.
 
@@ -77,9 +80,9 @@
 
 - LSTM hidden state is allowed; no explicit self reference modules.
 
-## Data and numerics
+## Data and Numerics
 
-- Observations: 106-dim vector, values normalized to [0, 1].
+- Observations: 106-dim vector (Alpha), 118-dim (Bio), 256-dim (Evolution), values normalized to [0, 1].
 
 - Energy values: use config constants (FOOD_ENERGY, STEP_COST, etc.).
 
@@ -87,7 +90,7 @@
 
 - Use config paths for data (data/, data/checkpoints, data/logs, data/analysis).
 
-## Error handling
+## Error Handling
 
 - Validate shapes and ranges at module boundaries; raise ValueError with context.
 
@@ -103,9 +106,11 @@
 
 - Rendering must be optional and headless-safe.
 
+- GPU acceleration available via Google Colab (notebooks/evolution_colab.ipynb).
+
 ## Tests
 
-- Use pytest; tests live in tests/.
+- Use pytest; tests live in cogito/tests/.
 
 - Name tests test_*.py and functions test_*.
 
@@ -121,60 +126,53 @@
 
 - Torch should default to CPU; avoid GPU-only code paths.
 
-## Cursor/Copilot rules
+## Project Structure
+
+```
+cogito/
+├── config.py              # Global configuration
+├── world/
+│   ├── grid.py            # 64×64 grid world
+│   ├── bio_grid.py        # Bio version with scent fields
+│   ├── evolution_world.py # Multi-individual world
+│   └── renderer.py        # Matplotlib visualization
+├── agent/
+│   ├── sensory_encoder.py # 256→64 encoder
+│   ├── recurrent_core.py  # 2-layer LSTM
+│   ├── action_head.py     # 7 actions
+│   ├── prediction_head.py # Prediction head
+│   ├── memory_buffer.py   # Experience replay
+│   ├── learner.py         # REINFORCE + prediction
+│   ├── cogito_agent.py    # Integrated agent
+│   └── bio_agent.py       # Bio-inspired agent
+├── evolution/
+│   ├── genome.py          # 24-dim genome
+│   ├── individual.py      # Agent wrapper
+│   ├── population.py      # Population management
+│   ├── selection.py       # Selection algorithms
+│   └── operators.py       # Crossover & mutation
+├── monitoring/
+│   ├── data_collector.py  # SQLite + memmap
+│   ├── state_analyzer.py  # t-SNE + DBSCAN
+│   ├── complexity_metrics.py
+│   └── svc_detector.py    # SVC detection
+├── experiments/
+│   ├── exp1_sensory_deprivation.py
+│   ├── exp2_digital_mirror.py
+│   ├── exp3_godel_rebellion.py
+│   ├── exp4_self_symbol.py
+│   └── exp5_cross_substrate.py
+└── tests/                  # 173 tests
+```
+
+## Documentation
+
+- README.md - Project overview
+- docs/EVOLUTION.md - Evolution system design
+- docs/REPRODUCTION.md - Reproduction mechanics
+- docs/implementation_plan.md - Implementation roadmap
+- docs/technical_plan.md - Technical specifications
+
+## Cursor/Copilot Rules
 
 - None found in .cursor/rules/, .cursorrules, or .github/copilot-instructions.md.
-
-## Planned project structure (from docs)
-
-+-- cogito/
-|   +-- __init__.py
-|   +-- config.py
-|   +-- world/
-|   |   +-- __init__.py
-|   |   +-- grid.py
-|   |   +-- entities.py
-|   |   +-- echo_zone.py
-|   |   +-- hidden_interface.py
-|   |   +-- renderer.py
-|   +-- agent/
-|   |   +-- __init__.py
-|   |   +-- genesis_alpha.py
-|   |   +-- genesis_beta.py
-|   |   +-- sensory_encoder.py
-|   |   +-- recurrent_core.py
-|   |   +-- action_head.py
-|   |   +-- prediction_head.py
-|   |   +-- memory_buffer.py
-|   |   +-- learner.py
-|   +-- monitoring/
-|   |   +-- __init__.py
-|   |   +-- data_collector.py
-|   |   +-- state_analyzer.py
-|   |   +-- svc_detector.py
-|   |   +-- complexity_metrics.py
-|   |   +-- dashboard.py
-|   |   +-- storage.py
-|   +-- experiments/
-|   |   +-- __init__.py
-|   |   +-- exp1_sensory_deprivation.py
-|   |   +-- exp2_digital_mirror.py
-|   |   +-- exp3_godel_rebellion.py
-|   |   +-- exp4_self_symbol.py
-|   |   +-- exp5_cross_substrate.py
-|   |   +-- controls.py
-|   +-- analysis/
-|   |   +-- __init__.py
-|   |   +-- exp1_analysis.py
-|   |   +-- exp2_analysis.py
-|   |   +-- exp3_analysis.py
-|   |   +-- exp4_analysis.py
-|   |   +-- exp5_analysis.py
-|   |   +-- cross_experiment.py
-|   |   +-- statistics.py
-|   +-- core/
-|   |   +-- __init__.py
-|   |   +-- simulation.py
-|   +-- tests/
-|       +-- test_phase0.py
-|       +-- test_phase2.py

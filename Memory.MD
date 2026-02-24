@@ -878,4 +878,20 @@ child = Individual(genome=new_genes, ...)  # 变异后代
 - [ ] 限制基因组参数范围，减少网络大小
 - [ ] 调整 `--small` 模式参数
 - [ ] 考虑批量并行处理
+
+### 已完成优化
+
+- [x] 限制基因组参数范围:
+  - encoder_hidden_dim: 32-256 → 32-128
+  - encoder_num_layers: 1-3 → 1-2
+  - core_hidden_dim: 32-256 → 32-128
+  - core_num_layers: 1-4 → 1-2
+  - 效果: 最大参数量从 1.3M → 330K (降低75%)
+
+### Colab GPU 加速
+
+- [x] 创建 `notebooks/evolution_colab.ipynb`
+- [x] 推送到 GitHub
+- 使用方式: 打开 Colab 链接，启用 T4 GPU，Run all
+- 预期提速: 10倍 (5 sps → 50+ sps)
 ```
